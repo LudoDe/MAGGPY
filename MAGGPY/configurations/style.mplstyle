@@ -1,0 +1,60 @@
+# Font sizes
+font.size           : 13
+axes.titlesize      : 13
+axes.labelsize      : 13
+xtick.labelsize     : 13
+ytick.labelsize     : 13
+legend.fontsize     : 13
+figure.titlesize    : 13
+
+# LaTeX rendering
+text.usetex         : True
+text.latex.preamble : \usepackage{amsmath} \usepackage{amssymb}
+font.family         : serif
+font.serif          : Computer Modern Roman
+mathtext.fontset    : cm
+axes.formatter.use_mathtext : True
+
+# Figure settings
+figure.figsize      : 8, 6
+figure.dpi          : 100
+savefig.dpi         : 300
+savefig.format      : pdf
+savefig.bbox        : tight
+
+# Line and marker settings
+lines.linewidth     : 1.5
+lines.markersize    : 6
+
+# Axes settings
+axes.linewidth      : 1.2
+axes.grid           : False
+axes.axisbelow      : True
+
+# Tick settings
+xtick.major.size    : 5
+xtick.minor.size    : 3
+xtick.major.width   : 1.2
+xtick.minor.width   : 1.0
+xtick.direction     : in
+xtick.top           : True
+
+ytick.major.size    : 5
+ytick.minor.size    : 3
+ytick.major.width   : 1.2
+ytick.minor.width   : 1.0
+ytick.direction     : in
+ytick.right         : True
+
+# Grid settings
+grid.alpha          : 0.3
+grid.linewidth      : 0.8
+
+# Legend settings
+legend.frameon      : True
+legend.framealpha   : 0.9
+legend.fancybox     : False
+legend.edgecolor    : black
+
+# Color cycle (professional palette)
+axes.prop_cycle     : cycler('color', ['1f77b4', 'ff7f0e', '2ca02c', 'd62728', '9467bd', '8c564b', 'e377c2', '7f7f7f', 'bcbd22', '17becf'])

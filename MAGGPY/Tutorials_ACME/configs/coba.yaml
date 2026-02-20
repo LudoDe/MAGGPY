@@ -1,0 +1,128 @@
+ET:
+        lat:              (40 + 31. / 60 ) * np.pi / 180.
+        lon:              (9 + 25. / 60) * np.pi / 180.
+        opening_angle:    np.pi / 3.
+        azimuth:          70.5674 * np.pi / 180.
+        psd_data:         ET_10_coba.txt
+        duty_factor:      0.85
+        detector_class:   earthDelta
+        plotrange:        3, 1000, 1e-25, 1e-20
+        fmin:             2.
+        fmax:             2048.
+        spacing:          geometric
+        df:               1./16.
+        npoints:          1000   
+        arm_length:       10000           
+
+ETS_15:
+        lat:              (40 + 31. / 60 ) * np.pi / 180.
+        lon:              (9 + 25. / 60) * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          70.5674 * np.pi / 180.
+        psd_data:         ET_15_coba.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        3, 1000, 1e-25, 1e-20
+        fmin:             2.
+        fmax:             2048.
+        spacing:          geometric
+        df:               1./16.
+        npoints:          1000
+        arm_length:       15000 
+
+ETN_15:
+        lat:              (50 + 43. / 60 ) * np.pi / 180.
+        lon:              (5 + 55. / 60) * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          118.0774 * np.pi / 180.
+        psd_data:         ET_15_coba.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        3, 1000, 1e-25, 1e-20
+        fmin:             2.
+        fmax:             2048.
+        spacing:          geometric
+        df:               1./16.
+        npoints:          1000
+        arm_length:       15000 
+
+CE40:
+        lat:              46.5 * np.pi / 180.
+        lon:              -119.4 * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          126. * np.pi / 180.
+        psd_data:         CE40_coba.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        10, 1000, 1e-25, 1e-20
+        fmin:             5
+        fmax:             5000
+        spacing:          geometric 
+        df:               1./4.    
+        npoints:          5000 
+        arm_length:       40000
+
+#CE20_psd and CE_40_psd 
+CE20:
+        lat:              46.5 * np.pi / 180.
+        lon:              -119.4 * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          126. * np.pi / 180.
+        psd_data:         CE20_psd.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        10, 1000, 1e-25, 1e-20
+        fmin:             8
+        fmax:             1024
+        spacing:          geometric 
+        df:               1./4.    
+        npoints:          5000 
+        arm_length:       20000
+
+LLO_sharp: # Renamed from LLO for clarity as LIGO O5
+      lat:                30.56 * np.pi / 180.
+      lon:                -90.77 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            197.7 * np.pi / 180.
+      psd_data:           ligo_sharp.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               3
+      fmax:               6000.0 
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000
+
+LHO_sharp: # Renamed from LHO for clarity as LIGO O5
+      lat:                46.46 * np.pi / 180.
+      lon:                -119.4 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            126. * np.pi / 180.
+      psd_data:           ligo_sharp.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               3
+      fmax:               6000
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000
+
+LIO_sharp: # Renamed from LHO for clarity as LIGO O5
+      lat:                19 * np.pi / 180.
+      lon:                -77 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            126. * np.pi / 180.
+      psd_data:           ligo_sharp.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               3
+      fmax:               6000
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000

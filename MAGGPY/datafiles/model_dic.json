@@ -1,0 +1,18 @@
+{
+  "fiducial_Hrad": "F",
+  "fiducial_kick265": "K265",
+  "fiducial_kick150": "K150",
+  "fiducial_qcbse": "QCBSE",
+  "fiducial_rad": "QCBB",
+  "fiducial_fmtbse": "RBSE",
+  "fiducial_klencki": "LK",
+  "fiducial_l01": "LC",
+  "fiducial_xuli": "LX",
+  "fiducial_HGoptimistic": "OPT",
+  "fiducial_pisnfarmer19": "F19",
+  "fiducial_Hrad_5M": "F5M",
+  "fiducial_delayed": "SND",
+  "fiducial_qhe": "QHE",
+  "fiducial_notides": "NT",
+  "fiducial_notides_pericirc": "NTC"
+}

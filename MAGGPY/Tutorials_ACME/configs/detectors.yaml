@@ -1,0 +1,204 @@
+ET:
+      lat:                (40 + 31. / 60 ) * np.pi / 180.
+      lon:                (9 + 25. / 60) * np.pi / 180.
+      opening_angle:      np.pi / 3.
+      azimuth:            70.5674 * np.pi / 180.
+      psd_data:           ET_psd.txt
+      duty_factor:        1
+      detector_class:     earthDelta
+      plotrange:          3, 1000, 1e-25, 1e-20
+      fmin:               2.
+      fmax:               2048.
+      spacing:            geometric
+      df:                 1./16.
+      npoints:            1000
+      arm_length:         10000
+ET_d:
+        lat:              (40 + 31. / 60 ) * np.pi / 180.
+        lon:              (9 + 25. / 60) * np.pi / 180.
+        opening_angle:    np.pi / 3.
+        azimuth:          70.5674 * np.pi / 180.
+        psd_data:         /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ET_d_psd.txt
+        duty_factor:      0.85
+        detector_class:   earthDelta
+        plotrange:        3, 1000, 1e-25, 1e-20
+        fmin:             2.
+        fmax:             2048.
+        spacing:          geometric
+        df:               1./16.
+        npoints:          1000   
+        arm_length:       10000
+
+LLO_O5: # Renamed from LLO for clarity as LIGO O5
+      lat:                30.56 * np.pi / 180.
+      lon:                -90.77 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            197.7 * np.pi / 180.
+      psd_data:           /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ligo_05.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               5
+      fmax:               5000.0 
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000
+LHO_O5: # Renamed from LHO for clarity as LIGO O5
+      lat:                46.46 * np.pi / 180.
+      lon:                -119.4 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            126. * np.pi / 180.
+      psd_data:           /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ligo_05.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               5
+      fmax:               5000.0 
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000
+      
+VIR_O5: # Renamed from VIR for clarity as Virgo O5
+      lat:                43.6 * np.pi / 180.
+      lon:                10.5 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            71. * np.pi / 180.
+      psd_data:           /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/virgo_05.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               8
+      fmax:               10000.0 
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         3000
+KAG_O5: # Renamed from KAG for clarity as Kagra O5
+      lat:                36.41 * np.pi / 180.
+      lon:                137.3 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            29.6 * np.pi / 180.
+      psd_data:           /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/kagra_05.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               1
+      fmax:               10000.0 
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         3000
+
+#CE20_psd and CE_40_psd 
+CE20:
+        lat:              46.5 * np.pi / 180.
+        lon:              -119.4 * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          126. * np.pi / 180.
+        psd_data:         /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/CE20_psd.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        10, 1000, 1e-25, 1e-20
+        fmin:             8
+        fmax:             1024
+        spacing:          geometric 
+        df:               1./4.    
+        npoints:          5000 
+        arm_length:       20000
+CE40:
+        lat:              46.5 * np.pi / 180.
+        lon:              -119.4 * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          126. * np.pi / 180.
+        psd_data:         /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/CE40_psd.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        10, 1000, 1e-25, 1e-20
+        fmin:             8
+        fmax:             1024
+        spacing:          geometric 
+        df:               1./4.    
+        npoints:          5000 
+        arm_length:       40000
+
+LLO_sharp: # Renamed from LLO for clarity as LIGO O5
+      lat:                30.56 * np.pi / 180.
+      lon:                -90.77 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            197.7 * np.pi / 180.
+      psd_data:           /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ligo_sharp.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               3
+      fmax:               6000.0 
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000
+
+LHO_sharp: # Renamed from LHO for clarity as LIGO O5
+      lat:                46.46 * np.pi / 180.
+      lon:                -119.4 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            126. * np.pi / 180.
+      psd_data:           /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ligo_sharp.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               3
+      fmax:               6000
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000
+
+LIO_sharp: # Renamed from LHO for clarity as LIGO O5
+      lat:                19 * np.pi / 180.
+      lon:                -77 * np.pi / 180.
+      opening_angle:      np.pi / 2.
+      azimuth:            126. * np.pi / 180.
+      psd_data:           /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ligo_sharp.txt
+      duty_factor:        1
+      detector_class:     earthL
+      plotrange:          10, 1000, 1e-25, 1e-20
+      fmin:               3
+      fmax:               6000
+      spacing:            geometric
+      df:                 1./4.
+      npoints:            5000
+      arm_length:         4000
+
+ETS_15:
+        lat:              (40 + 31. / 60 ) * np.pi / 180.
+        lon:              (9 + 25. / 60) * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          70.5674 * np.pi / 180.
+        psd_data:         /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ET15kmdata_freq_1_L.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        3, 1000, 1e-25, 1e-20
+        fmin:             2.
+        fmax:             2048.
+        spacing:          geometric
+        df:               1./16.
+        npoints:          1000
+        arm_length:       15000  
+ETN_15:
+        lat:              (50 + 43. / 60 ) * np.pi / 180.
+        lon:              (5 + 55. / 60) * np.pi / 180.
+        opening_angle:    np.pi / 2.
+        azimuth:          118.0774 * np.pi / 180.
+        psd_data:         /mnt/c/Users/Ludovico/Desktop/TaskForce/conf_CE/THESSEUS/psds/ET15kmdata_freq_1_L.txt
+        duty_factor:      0.85
+        detector_class:   earthL
+        plotrange:        3, 1000, 1e-25, 1e-20
+        fmin:             2.
+        fmax:             2048.
+        spacing:          geometric
+        df:               1./16.
+        npoints:          1000
+        arm_length:       15000
+
