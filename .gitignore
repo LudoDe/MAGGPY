@@ -48,3 +48,5 @@ __pycache__/*
 **.ipynb_checkpoints
 
 job_configs
+
+|Tutorials_ACME/simulated_catalogue.csv
