@@ -64,6 +64,14 @@ configurations/         Matplotlib style files
 
 ## Installation
 
+I really reccomend you create a new environment as the multiple libraries that are being juggled in this code don't play well with too old or too new versions of python
+```bash
+conda create -n acme_env python=3.10 -y
+conda activate acme_env
+```
+
+You can then easily install all relevant libraries or by running `Tutorials_ACME/setup.ipynb`.
+
 ```bash
 git clone https://github.com/LudoDe/MAGGPY.git
 cd MAGGPY
