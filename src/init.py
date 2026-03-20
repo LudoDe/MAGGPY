@@ -200,7 +200,7 @@ def load_redshift_data(
         
         try:
             # Find the file matching the pattern
-            model_file = next(population_folder.glob(f'samples*{model_name}*.dat'))
+            model_file = next(population_folder.glob(f'samples*{model_name}*BNS*.dat'))
             z_arr = np.loadtxt(model_file)
             print(f"Using redshift model: {model_file.name} with {len(z_arr)} BNSs.")
             
@@ -270,7 +270,6 @@ def load_redshift_data(
         P_z_density         = hist_z
         total_rate          = len(z_arr)  # Assuming the catalog represents 1 year
         local_rate          = 365
-    
     return z_arr, P_z_interp, total_rate, local_rate, z_grid, P_z_density
 
 def load_and_filter_redshifts(

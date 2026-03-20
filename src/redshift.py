@@ -49,7 +49,7 @@ def get_mrd_redshift_distribution(
     # Get local rate R_0 at z=0 (interpolate to z=0)
     mrd_interp = interp1d(z_mrd, mrd, kind='linear', bounds_error=False, fill_value='extrapolate')
     local_rate = float(mrd_interp(0.0))  # R_0 in Gpc^-3 yr^-1
-    
+
     # Compute cosmological quantities
     cosmology = FlatLambdaCDM(H0=Planck18.H0, Om0=Planck18.Om0)
     dVc_dz = cosmology.differential_comoving_volume(z_mrd).to(u.Gpc**3 / u.sr).value * 4 * np.pi
@@ -59,7 +59,8 @@ def get_mrd_redshift_distribution(
     
     # Total rate: integrate dN/dz over z
     total_rate = float(np.trapezoid(dN_dz, z_mrd))
-    
+    print(f"Computed total merger rate: {total_rate:.1f} yr^-1 (local R_0 = {local_rate:.1f} Gpc^-3 yr^-1) for component {component}")  
+
     # Probability density P(z) = dN/dz / total_rate
     P_z_density = dN_dz / total_rate
     P_z_interp = interp1d(z_mrd, P_z_density, kind='linear', bounds_error=False, fill_value=0.0)

@@ -343,6 +343,7 @@ def make_observations(thetas, params : SimParams, interps : Interps,
         "Fp_det"                : P_F_64ms_50_300[final_mask],
         "z_det"                 : m_prop_triggered["z"][final_mask],
         "theta_v_det"           : m_prop_triggered["theta_v"][final_mask],
+        "R_F_theta_det"         : m_prop_triggered["R_F_theta"][final_mask],
         "triggered_events"      : triggered_events,
         "isotropic_energy_det"  : m_prop_triggered["isotropic_energy"][final_mask],
     }
@@ -857,6 +858,93 @@ def calculate_isotropic_luminosity(
     L_iso       = E_iso / (T90_rest + 1e-99)
 
     return E_iso, L_iso
+
+def compute_iso_bias_diagnostics(
+    thetas      : list,
+    params      : SimParams,
+    interps     : Interps,
+    limits      : Dict[str, Any] = DEFAULT_LIMITS,
+    n_events    : int = N_SIMS,
+) -> Optional[dict]:
+    """
+    Compute per-event diagnostic quantities that expose the bias between the
+    "true" isotropic energy (from model parameters) and the observer-recovered
+    isotropic energy (from simulated observables).
+
+    For each detected GRB the function returns:
+
+    * ``k_corr``         – k-correction factor  S_bolo(rest 50–300 keV) /
+                           S_band(obs 10–1000 keV).
+    * ``bolo_correction``– ratio of the bolometric band integral (1–10^4 keV,
+                           rest frame, used to normalise N0 during generation)
+                           to the observer BATSE band integral (50–300 keV,
+                           obs frame) at the detected E_p.  This captures how
+                           much energy falls outside the detector band.
+    * ``R_F``            – viewing-angle flux suppression factor R_F(theta_v).
+    * ``theta_v``        – viewing angle in radians.
+    * ``E_p_obs``        – observed peak energy (keV).
+    * ``E_p_rest``       – rest-frame peak energy E_p*(1+z) (keV).
+    * ``z``              – redshift.
+    * ``E_iso_true``     – true isotropic energy from model parameters (erg).
+    * ``E_iso_rec``      – observer-recovered isotropic energy (erg).
+    * ``ratio``          – E_iso_rec / E_iso_true (dimensionless).
+
+    Args:
+        thetas  : Model parameters [k, L_L0, L_mu_E, sigma_E, L_mu_tau,
+                  sigma_tau, f_j].
+        params  : :class:`SimParams` instance.
+        interps : :class:`Interps` instance.
+        limits  : Detection-limit dictionary.
+        n_events: Number of MC draws.
+
+    Returns:
+        dict with the above arrays, or ``None`` if no events pass cuts.
+    """
+    obs = make_observations_with_iso(thetas, params, interps, limits=limits, n_events=n_events)
+    if obs is None:
+        return None
+
+    z          = obs["z_det"]
+    one_plus_z = 1.0 + z
+    E_p_obs    = obs["Ep_det"]
+    E_p_rest   = E_p_obs * one_plus_z
+    S_obs      = obs["f_det"]
+    R_F        = obs.get("R_F_theta_det", np.ones_like(z))  # fall back gracefully
+
+    # ── k-correction (same bands as calculate_isotropic_luminosity) ──────────
+    def integrand(E, Ep):
+        return E * broken_power_law(E, Ep)
+
+    S_bolo, _ = quad_vec(lambda E: integrand(E, E_p_rest), 50,  300)
+    S_band, _ = quad_vec(lambda E: integrand(E, E_p_obs),  10, 1000)
+    k_corr    = S_bolo / (S_band + 1e-99)
+
+    # ── bolometric correction ─────────────────────────────────────────────────
+    # int_0_alt integrates E*N(E) from 1 to 1e4 keV (rest frame) – used in N0.
+    # int_4_alt integrates E*N(E) from 50 to 300 keV (obs frame) – used for
+    # the observed fluence.  Their ratio measures band incompleteness.
+    I0_bolo    = interps.int_0_alt(E_p_rest)   # bolometric in rest frame
+    I4_band    = interps.int_4_alt(E_p_obs)    # BATSE band in obs frame
+    bolo_correction = I0_bolo / (I4_band + 1e-99)
+
+    # ── recovered vs true E_iso ───────────────────────────────────────────────
+    E_iso_rec  = obs["E_iso_det"]
+    E_iso_true = obs["isotropic_energy_det"]
+    ratio      = E_iso_rec / (E_iso_true + 1e-99)
+
+    return {
+        "k_corr"            : k_corr,
+        "bolo_correction"   : bolo_correction,
+        "R_F"               : R_F,
+        "theta_v"           : np.degrees(obs["theta_v_det"]),   # degrees
+        "E_p_obs"           : E_p_obs,
+        "E_p_rest"          : E_p_rest,
+        "z"                 : z,
+        "E_iso_true"        : E_iso_true,
+        "E_iso_rec"         : E_iso_rec,
+        "ratio"             : ratio,
+    }
+
 
 def make_observations_with_iso(
         thetas, 

@@ -112,12 +112,11 @@ def extract_samples_and_calculate_cdfs(
             if not (key in observables.keys()):
                 continue
             # in case of nan observables, skip
-
             cdfs[key].append(observables[key])
 
     if flatten:
         for key, value in cdfs.items():
-            if key == "c_det":
+            if key == "c_det" or key == "triggered_events":
                 continue
             cdfs[key] = np.concatenate(value)
 
@@ -127,9 +126,9 @@ def generate_observables(
         thetas, 
         default_params, 
         default_interpolator, 
-        limits: Dict[str, Any]          = DEFAULT_LIMITS,
-        years_of_data_simulated: float  = 10,
-        n_sims: int = N_SIMS
+        limits                      : Dict[str, Any]    = DEFAULT_LIMITS,
+        years_of_data_simulated     : float             = 10,
+        n_sims                      : int               = N_SIMS
     ) -> Dict[str, Any]:
     """
     Calculates the log likelihood based on the collected GRB observables.
@@ -144,8 +143,20 @@ def generate_observables(
     if obs is None:
         return -np.inf
 
-    t_det, f_det, Ep_det, Fp_det, z_det, theta_det, triggered_events, e_tot_obs, E_iso, L_iso = obs.values()
+    #print(len(obs.values()))
+    #t_det, f_det, Ep_det, Fp_det, z_det, theta_det, triggered_events, e_tot_obs, E_iso, L_iso = obs.values()
+    t_det           = obs["t_det"]
+    f_det           = obs["f_det"]
+    Ep_det          = obs["Ep_det"]
+    Fp_det          = obs["Fp_det"]
+    z_det           = obs["z_det"]
+    theta_det       = obs["theta_v_det"]
+    triggered_events = obs["triggered_events"]
+    e_tot_obs       = obs["isotropic_energy_det"]
+    E_iso           = obs["E_iso_det"]
+    L_iso           = obs["L_iso_det"]
     
+
     generated_grbs          = n_sims
     gbm_efficiency          = 0.6 # 60% efficiency for GBM (duty cycle + SAA + FOV)
     geometric_factor_theta  = 1 - np.cos(default_params.theta_v_max) # Geometric factor for the viewing angle
