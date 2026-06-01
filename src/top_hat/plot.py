@@ -86,21 +86,8 @@ class TopHatPlotter:
             return n_detected / years_sim
         else:
             # FLAT_THETA, LOGNORMAL_THETA, or THETA_C
-            theta_c_param, fj = theta[4], theta[5]
-            
-            if geometric_eff_func is None:
-                # Default geometric efficiency calculation
-                if self.model_type == "FLAT_THETA":
-                    geometric_eff = 1 - np.cos(np.deg2rad(theta_c_param))
-                elif self.model_type == "LOGNORMAL_THETA":
-                    # theta_c_param is log10(theta_c_med)
-                    theta_c_med = 10**theta_c_param
-                    geometric_eff = 1 - np.cos(np.deg2rad(theta_c_med))
-                elif self.model_type == "THETA_C":
-                    # theta_c_param is theta_c in degrees (direct sampling)
-                    geometric_eff = 1 - np.cos(np.deg2rad(theta_c_param))
-            else:
-                geometric_eff = geometric_eff_func(theta_c_param)
+            theta_c_param, fj   = theta[4], theta[5]
+            geometric_eff       = geometric_eff_func(theta_c_param)
             
             physics_eff = n_detected / n_events
             total_eff = geometric_eff * physics_eff
@@ -181,9 +168,8 @@ class TopHatPlotter:
             plt.close(fig)
         return fig
     
-    def plot_cdf_comparison(self, mc_func, params_in, distances, k_interpolator,
+    def plot_cdf_comparison(self, mc_func, params_in, geometric_eff_func,
                             n_samples: int = 200, n_events: int = 10000,
-                            geometric_eff_func=None,
                             filename: str = "cdf_comparison.pdf", **kargs) -> plt.Figure:
         """Compare simulated vs observed CDFs for pflux and epeak."""
         samples = self.get_samples()[-n_samples:]
@@ -191,10 +177,10 @@ class TopHatPlotter:
         p_flx_all, e_pk_all, rates = [], [], []
         
         for theta in samples:
-            results = mc_func(theta, n_events, params_in, distances, k_interpolator)
+            results = mc_func(theta, n_events, params_in)
             
-            trigger_mask = results["p_flux"] > 4
-            analysis_mask = trigger_mask & (results["E_p_obs"] > 50) & (results["E_p_obs"] < 10000)
+            trigger_mask    = results["p_flux"] > 4
+            analysis_mask   = trigger_mask & (results["E_p_obs"] > 50) & (results["E_p_obs"] < 10000)
             
             p_flx_all.append(results["p_flux"][analysis_mask])
             e_pk_all.append(results["E_p_obs"][analysis_mask])
