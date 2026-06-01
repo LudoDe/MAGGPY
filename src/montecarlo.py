@@ -10,12 +10,10 @@ from scipy.special 		import gammaln
 from astropy.cosmology 	import Planck18, FlatLambdaCDM
 from dataclasses 		import dataclass
 from scipy.integrate    import cumulative_trapezoid
-from scipy.stats        import cramervonmises_2samp, ks_2samp, gengamma
+from scipy.stats        import cramervonmises_2samp, gengamma
 from typing             import Any, Dict, Optional, Callable
 from scipy.integrate    import cumulative_trapezoid, quad_vec
 from .spectral_models   import broken_power_law
-# OPTIMIZED MOVING AVERAGE using np.lib.stride_tricks
-from numpy.lib.stride_tricks import sliding_window_view
     
 DEFAULT_LIMITS: Dict[str, Any] = {
     "F_LIM"         : 4,         # 4 ph/cm^2/s in 64 ms
@@ -72,10 +70,6 @@ class Interps:
     int_2_alt : callable
     int_3_alt : callable
     int_4_alt : callable
-
-    interp_t90      : Any = None
-    interp_flu      : Any = None
-    interp_pf       : Any = None
    
 def l_random_new(A, n, rng = None):
     return gengamma.rvs(a = (A - 1)/A, c = -A, size=n, random_state=rng) #! Modified schelchter, based on Salafia et al 2024
@@ -150,134 +144,6 @@ def generate_macro_properties(thetas : list, params : SimParams, interps :Interp
         "isotropic_energy"  : 1e49 * 10**L_L0 * L_arr / (1 - np.cos(params.theta_c)) # Total energy in erg
     }
 
-def compute_Fp_64_ms_sliding_window_old(m_prop_m: dict, interps: Interps) -> np.ndarray:
-    """Calculate peak flux with optimized moving average."""
-    t_peak      = m_prop_m['t_peak_c_z']
-    
-    n_bins      = 16
-    bin_width   = 0.008
-    window_size = 8
-    
-    time_offsets = np.arange(-n_bins / 2 + 0.5, n_bins / 2 + 0.5) * bin_width
-    
-    # Broadcasting setup
-    abs_times = time_offsets[:, np.newaxis] + t_peak[np.newaxis, :]
-    time_ratios = np.maximum(abs_times / t_peak[np.newaxis, :], 1e-12)
-    
-    # Get all needed parameters at once
-    alpha_e = m_prop_m['alpha_e'][np.newaxis, :]
-    alpha_n = m_prop_m['alpha_n'][np.newaxis, :]
-    E_p_obs = m_prop_m["E_p_obs"][np.newaxis, :]
-    F_0     = m_prop_m["F_0"][np.newaxis, :]
-    
-    # Calculate temporal profiles
-    mask_before_peak = time_ratios < 1.0
-    P_e_mat = np.where(mask_before_peak, 1.0, time_ratios ** (-alpha_e))
-    P_n_mat = np.where(mask_before_peak, time_ratios, time_ratios ** (-alpha_n))
-    
-    # Spectral evolution
-    E_p_t = E_p_obs * P_e_mat
-    F_0_t = F_0 * P_n_mat
-    
-    # Calculate flux
-    flux_array = F_0_t * interps.int_3_alt(E_p_t) * 6.2e8
-    
-    # Create sliding windows along axis 0 (time axis)
-    flux_windows = sliding_window_view(flux_array, window_shape=window_size, axis=0)
-    # Shape: (n_bins - window_size + 1, n_grbs, window_size)
-    
-    # Average over the window dimension
-    moving_averages = flux_windows.mean(axis=-1)
-    # Shape: (n_bins - window_size + 1, n_grbs)
-    
-    # Find maximum along time axis
-    F64ms = np.max(moving_averages, axis=0)
-    
-    return F64ms
-
-def compute_time_evolution_old(m_prop_m: dict, interps: Interps, 
-                                      bin_width_ms: float = 16.0,
-                                      n_bins: int = 2000) -> tuple:
-    """
-    Compute the time evolution of the fluence using fixed time bins.
-    
-    This version uses fixed time intervals (e.g., 16ms) independent of t_peak,
-    which is more consistent with how real detectors operate. For 200 bins this is about 3.2s. So safe for most GRBs.
-    
-    Parameters:
-        m_prop_m : dict
-            Dictionary containing macro properties for valid GRBs.
-        interps : Interps
-            Interpolator object containing spectral integration functions.
-        bin_width_ms : float
-            Width of each time bin in milliseconds (default: 16ms)
-        n_bins : int
-            Total number of time bins to compute (default: 200)
-    
-    Returns:
-        t_90_array_out : np.ndarray
-            Array of t₉₀ values.
-        final_fluence : np.ndarray
-            Final fluence values.
-    """
-    t_peak          = m_prop_m['t_peak_c_z']
-    
-    # Convert bin width to seconds
-    bin_width       = bin_width_ms / 1000.0
-    
-    # Create time grid: start from 0, go out to n_bins * bin_width
-    # Use bin centers for evaluation
-    time_edges      = np.arange(n_bins + 1) * bin_width
-    time_centers    = (time_edges[:-1] + time_edges[1:]) / 2.0  # Shape: (n_bins,)
-    
-    # Broadcast time centers for all GRBs
-    # Shape: (n_bins, n_grbs)
-    time_grid = time_centers[:, np.newaxis]  # (n_bins, 1)
-    t_peak_grid = t_peak[np.newaxis, :]      # (1, n_grbs)
-    
-    # Calculate time ratios t/t_peak
-    time_ratios = time_grid / t_peak_grid
-    safe_time_ratios = np.maximum(time_ratios, 1e-12)
-    
-    # Calculate P_e(t) and P_n(t) using the same prescription
-    P_e_mat = np.where(safe_time_ratios < 1.0, 1.0, np.power(safe_time_ratios, -m_prop_m['alpha_e']))
-    P_n_mat = np.where(safe_time_ratios < 1.0, safe_time_ratios, np.power(safe_time_ratios, -m_prop_m['alpha_n']))
-
-    # Calculate evolving spectral properties
-    E_p_obs_t = m_prop_m["E_p_obs"] * P_e_mat
-    
-    # Calculate fluence rate at each time bin (erg/cm²/s in 50-300 keV)
-    fluence_rate = m_prop_m["F_0"] * P_n_mat * interps.int_4_alt(E_p_obs_t)
-    
-    # Integrate fluence over time using trapezoidal rule
-    # Note: using time_centers as x-values
-    fluence_time_mat = cumulative_trapezoid(
-        fluence_rate, 
-        x=time_centers, 
-        axis=0, 
-        initial=0
-    )
-    
-    # Final fluence at last time bin
-    total_fluence = fluence_time_mat[-1]
-    
-    # Find t₉₀: time when fluence reaches 90% of total
-    # Need to handle edge cases where 90% is never reached
-    threshold_fluence = 0.9 * total_fluence
-    
-    # Find first index where fluence >= 90% threshold
-    above_threshold = fluence_time_mat >= threshold_fluence
-    t_90_indices = np.argmax(above_threshold, axis=0)
-    
-    # Handle cases where threshold is never reached (use last bin)
-    never_reached = ~np.any(above_threshold, axis=0)
-    t_90_indices[never_reached] = n_bins - 1
-    
-    # Get actual t₉₀ times from the time grid
-    t_90_array_out = time_centers[t_90_indices]
-    
-    return t_90_array_out, total_fluence
-
 def make_observations(thetas, params : SimParams, interps : Interps, 
                       limits : Dict[str, Any] = DEFAULT_LIMITS, n_events : int = N_SIMS):
     """
@@ -307,11 +173,6 @@ def make_observations(thetas, params : SimParams, interps : Interps,
     #P_F_64ms_50_300         = compute_Fp_64_ms_sliding_window(m_prop_triggered, interps)
     P_F_64ms_50_300         = compute_Fp_64_ms_optimized(m_prop_triggered, interps)
     t_90_array, f_det_in    = compute_time_evolution(m_prop_triggered, interps)
-
-    # Compare to interps
-    #P_F_64ms_50_300         = compute_Fp_64_ms_sliding_window_2(m_prop_triggered, interps)
-
-    #t_90_array, f_det_in    = compute_time_evolution_2(m_prop_triggered, interps)
 
     # Additional detection criteria on computed observables
     detection_mask = (
@@ -359,95 +220,19 @@ def cdf_sample(data, n, rng):
     Returns:
         numpy array of n samples distributed according to data
     """
-    # Sort the data to build the empirical CDF
-    x_sorted    = np.sort(data)
+    x_sorted    = np.sort(data) # Sort the data to build the empirical CDF
     u           = rng.uniform(0, 1, n) # Generate n random percentiles
     samples     = np.interp(u, np.linspace(0, 1, len(data)), x_sorted) # Direct inverse transform sampling (map percentiles to data values)     
     return samples
 
 def crammer_score(y_sim, y_obs, rng):
-    y_resample   = cdf_sample(y_sim, len(y_obs), rng=rng)  # Resample y_sim to match the length of y_obs, mainly if simulating a small amount of events for 16 years this shouldn't be necessary
-    y_in        = np.log10(y_resample)
-    y_out       = np.log10(y_obs)
+    y_resample      = cdf_sample(y_sim, len(y_obs), rng=rng)  # Resample y_sim to match the length of y_obs, mainly if simulating a small amount of events for 16 years this shouldn't be necessary
+    y_in            = np.log10(y_resample)
+    y_out           = np.log10(y_obs)
     return np.log(cramervonmises_2samp(y_in, y_out).pvalue) # Use the Cramer von Mises test for shape comparison
 
 def score_func(y_sim, y_obs, rng=None):
     return crammer_score(y_sim, y_obs, rng=rng)
-
-def log_likelihood_(
-        thetas              : list, 
-        params              : SimParams, 
-        interps             : Interps, 
-        limits              : Dict[str, Any] = DEFAULT_LIMITS,
-        n_years             : float = None
-    ):
-    
-    params.rng = np.random.default_rng(42)
-
-    fj                      = thetas[-1]  # last parameter is f_j
-    
-    n_years                 = params.triggered_years if n_years is None else n_years # 16 ish years
-    GBM_eff                 = 0.6
-    geometric_efficiency    = 1 - np.cos(params.theta_v_max)
-    #factor to make the sim faster by simulating less years and scaling up later
-    factor                  = 1
-    n_years                 = n_years / factor
-    
-    # Total BNS mergers per year in the universe (all-sky)
-    total_bns_all_sky       = n_years * len(params.z_arr)
-    
-    # Total number of GRBs to simulate (already accounts for geometry and time)
-    available_events        = total_bns_all_sky * geometric_efficiency * GBM_eff * fj
-    n_events                = int(available_events)
-
-    # Run simulation
-    obs = make_observations(
-        thetas, 
-        params, 
-        interps,
-        limits = limits,
-        n_events = n_events
-    )
-
-    if obs is None:
-        return -np.inf, None, None, None, None, None
-
-    t_det = obs["t_det"]
-
-    detected_events = len(t_det)
-
-    if detected_events < 5:  # Minimum required events for stable comparison
-        return -np.inf, None, None, None, None, None 
-
-    #Cramer von Mises test but log scale obs and sim values
-    logL_shape_t90     = score_func(t_det           , params.duration_data  , rng=params.rng    )
-    logL_shape_epeak   = score_func(obs["Ep_det"]   , params.epeak_data     , rng=params.rng    )
-    logL_shape_pflux   = score_func(obs["Fp_det"]   , params.pflux_data     , rng=params.rng    )
-    logL_shape_fluence = score_func(obs["f_det"]    , params.fluence_data   , rng=params.rng    )
-
-    total_logL_shape    = (logL_shape_epeak + logL_shape_t90 + logL_shape_pflux + logL_shape_fluence) 
-
-    # --- Calculate Rate Log-Likelihood ---
-    total_observed_events   = params.yearly_rate * params.triggered_years # this is the triggered total number of events
-    # normalize by factor 
-    total_observed_events  = total_observed_events / factor
-
-    detection_efficiency = obs["triggered_events"] / n_events
-    expected_detections  = available_events * detection_efficiency
-
-    # 3. Calculate the Poisson log-likelihood
-    if expected_detections <= 0:
-        return -np.inf, None, None, None, None, None
-
-    logL_norm = poiss_log(k=total_observed_events, mu=expected_detections)
-
-    # For diagnostics, calculate the equivalent yearly rate
-    simulated_yearly_rate = expected_detections / n_years
-
-    # Total log-likelihood
-    likelihood_total    = total_logL_shape + logL_norm
-    
-    return likelihood_total, simulated_yearly_rate , logL_shape_epeak, logL_shape_t90, logL_shape_pflux, logL_shape_fluence
 
 def log_likelihood(
         thetas              : list, 
@@ -509,12 +294,6 @@ def log_likelihood(
         logL_shape_pflux,
         logL_shape_fluence
     )
-
-
-
-
-
-
 
 TIME_RESOLUTION = 200
 MIN_T_RATIO     = 0.0001
@@ -641,157 +420,6 @@ def compute_time_evolution(m_prop_m: dict, interps: Interps) -> tuple:
 
     return t_90_array_out, total_fluence
 
-
-
-def compute_time_evolution_(m_prop_m: dict, interps: Interps, 
-                                      bin_width_ms: float = 16.0,
-                                      n_bins: int = 200) -> tuple:
-    """
-    Compute the time evolution of the fluence using fixed time bins.
-    
-    This version uses fixed time intervals (e.g., 16ms) independent of t_peak,
-    which is more consistent with how real detectors operate. For 200 bins this is about 3.2s. So safe for most GRBs.
-    
-    Parameters:
-        m_prop_m : dict
-            Dictionary containing macro properties for valid GRBs.
-        interps : Interps
-            Interpolator object containing spectral integration functions.
-        bin_width_ms : float
-            Width of each time bin in milliseconds (default: 16ms)
-        n_bins : int
-            Total number of time bins to compute (default: 200)
-    
-    Returns:
-        t_90_array_out : np.ndarray
-            Array of t₉₀ values.
-        final_fluence : np.ndarray
-            Final fluence values.
-    """
-    t_peak = m_prop_m['t_peak_c_z']
-    n_grbs = len(t_peak)
-    
-    # Convert bin width to seconds
-    bin_width = bin_width_ms / 1000.0
-    
-    # Create time grid: start from 0, go out to n_bins * bin_width
-    # Use bin centers for evaluation
-    time_edges = np.arange(n_bins + 1) * bin_width
-    time_centers = (time_edges[:-1] + time_edges[1:]) / 2.0  # Shape: (n_bins,)
-    
-    # Broadcast time centers for all GRBs
-    # Shape: (n_bins, n_grbs)
-    time_grid = time_centers[:, np.newaxis]  # (n_bins, 1)
-    t_peak_grid = t_peak[np.newaxis, :]      # (1, n_grbs)
-    
-    # Calculate time ratios t/t_peak
-    time_ratios = time_grid / t_peak_grid
-    safe_time_ratios = np.maximum(time_ratios, 1e-12)
-    
-    # Calculate P_e(t) and P_n(t) using the same prescription
-    P_e_mat = np.where(safe_time_ratios < 1.0, 1.0, 
-                       np.power(safe_time_ratios, -m_prop_m['alpha_e']))
-    P_n_mat = np.where(safe_time_ratios < 1.0, safe_time_ratios, 
-                       np.power(safe_time_ratios, -m_prop_m['alpha_n']))
-    
-    # Calculate evolving spectral properties
-    E_p_obs_t = m_prop_m["E_p_obs"] * P_e_mat
-    
-    # Calculate fluence rate at each time bin (erg/cm²/s in 50-300 keV)
-    fluence_rate = m_prop_m["F_0"] * P_n_mat * interps.int_4_alt(E_p_obs_t)
-    
-    # Integrate fluence over time using trapezoidal rule
-    # Note: using time_centers as x-values
-    fluence_time_mat = cumulative_trapezoid(
-        fluence_rate, 
-        x=time_centers, 
-        axis=0, 
-        initial=0
-    )
-    
-    # Final fluence at last time bin
-    total_fluence = fluence_time_mat[-1]
-    
-    # Find t₉₀: time when fluence reaches 90% of total
-    # Need to handle edge cases where 90% is never reached
-    threshold_fluence = 0.9 * total_fluence
-    
-    # Find first index where fluence >= 90% threshold
-    above_threshold = fluence_time_mat >= threshold_fluence
-    t_90_indices = np.argmax(above_threshold, axis=0)
-    
-    # Handle cases where threshold is never reached (use last bin)
-    never_reached = ~np.any(above_threshold, axis=0)
-    t_90_indices[never_reached] = n_bins - 1
-    
-    # Get actual t₉₀ times from the time grid
-    t_90_array_out = time_centers[t_90_indices]
-    
-    return t_90_array_out, total_fluence
-
-
-
-
-def compute_Fp_64_ms_sliding_window_2(m_prop_m: dict, interps: Interps) -> np.ndarray:
-    """Calculate peak flux with optimized moving average using interpolators."""
-    t_peak      = m_prop_m['t_peak_c_z']
-    E_p_obs     = m_prop_m["E_p_obs"]
-    theta_v     = m_prop_m["theta_v"]
-    F_0         = m_prop_m["F_0"]
-
-    # Prepare points for interpolation (theta_v, log10(E_p), log10(t_peak))
-    # We use log10 for E_p and t_peak as the grid is likely logarithmic
-    points = np.column_stack((
-        theta_v, 
-        np.log10(E_p_obs), 
-        np.log10(t_peak)
-    ))
-    
-    # Get correction factor from interpolator
-    # The interpolator returns the peak flux factor (integral part * 6.2e8 * shape factor)
-    flux_factor = interps.interp_pf(points)
-    
-    # F_p = F_0 * factor
-    F64ms = F_0 * flux_factor
-    
-    return F64ms
-
-def compute_time_evolution_2(m_prop_m: dict, interps: Interps) -> tuple:
-    """
-    Compute the time evolution of the fluence using interpolators.
-    
-    Parameters:
-        m_prop_m : dict
-            Dictionary containing macro properties for valid GRBs.
-        interps : Interps
-            Interpolator object containing spectral integration functions.
-        bin_width_ms, n_bins: Ignored in this optimized version.
-    
-    Returns:
-        t_90_array_out : np.ndarray
-            Array of t₉₀ values.
-        final_fluence : np.ndarray
-            Final fluence values.
-    """
-    t_peak      = m_prop_m['t_peak_c_z']
-    E_p_obs     = m_prop_m["E_p_obs"]
-    theta_v     = m_prop_m["theta_v"]
-    F_0         = m_prop_m["F_0"]
-    
-    # Prepare points for interpolation (theta_v, log10(E_p))
-    points = np.column_stack((theta_v, np.log10(E_p_obs)))
-    
-    # Interpolate normalized t90 and fluence integral
-    # t90_norm = t90 / t_peak
-    # flu_norm = Fluence / (F_0 * t_peak)
-    t90_norm = interps.interp_t90(points)
-    flu_norm = interps.interp_flu(points)
-    
-    t_90_array_out = t90_norm * t_peak
-    final_fluence  = flu_norm * F_0 * t_peak 
-    
-    return t_90_array_out, final_fluence
-
 def calculate_isotropic_luminosity(
     detected_properties: dict, 
     interps: Interps
@@ -888,7 +516,6 @@ def make_observations_with_iso(
     obs["L_iso_det"] = L_iso_det
 
     return obs
-
 
 def generate_grb_population(
         thetas: list,

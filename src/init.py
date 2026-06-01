@@ -4,6 +4,7 @@ init.py - Initialization Module
 This module contains all the functions needed to initialize the Monte Carlo simulation. 
 """
 
+import re
 import time
 import numpy            as np
 from pathlib            import Path
@@ -12,15 +13,12 @@ from .montecarlo        import SimParams, Interps
 from .spectral_models   import broken_power_law, DEFAULT_SPECTRAL_PARAMS
 from typing             import Any, Callable, Dict, Optional, Tuple
 from .data_io           import get_Rf_Re, get_alpha_n_alpha_e, get_redshift_distribution, catalogue_prep
-from .redshift          import get_mrd_redshift_distribution, sample_from_mrd
-from scipy.interpolate  import RegularGridInterpolator, interp1d
-from astropy            import units as u
-from astropy.cosmology  import FlatLambdaCDM, Planck18
-import re
+from .redshift          import get_mrd_redshift_distribution
+from scipy.interpolate  import interp1d
 
 SEED = 42  # Seed for reproducibility
 
-def create_integral_interpolators_alt( 
+def create_integral_interpolators( 
     alpha   : float = DEFAULT_SPECTRAL_PARAMS["alpha"],
     beta_s  : float = DEFAULT_SPECTRAL_PARAMS["beta_s"],
     n       : float = DEFAULT_SPECTRAL_PARAMS["n"],
@@ -79,87 +77,6 @@ def create_integral_interpolators_alt(
     ]
     
     return (*interp_funcs, E_p_arr)
-
-def create_temporal_interpolators(
-    int_3_alt   : Callable,
-    int_4_alt   : Callable,
-    alpha_n_func: Callable,
-    alpha_e_func: Callable,
-    theta_v_max : float = 0.5
-) -> Tuple[RegularGridInterpolator, RegularGridInterpolator, RegularGridInterpolator]:
-    """
-    Creates interpolators for T90, Total Fluence, and Peak Flux (64ms).
-    """
-    print("Generating temporal interpolators... (this may take a moment)")
-    
-    # Define grids
-    theta_vals = np.linspace(0, theta_v_max, 20)
-    Ep_vals    = np.logspace(1, 4.3, 25) # 10 keV to 20 MeV or 20_000 keV
-    tp_vals    = np.logspace(-2, 2, 30)  # 10ms to 100s
-    
-    # Pre-calculate alphas
-    a_n_grid = alpha_n_func(theta_vals)
-    a_e_grid = alpha_e_func(theta_vals)
-    
-    # Output arrays
-    res_t90 = np.zeros((len(theta_vals), len(Ep_vals)))
-    res_flu = np.zeros((len(theta_vals), len(Ep_vals)))
-    res_pf  = np.zeros((len(theta_vals), len(Ep_vals), len(tp_vals)))
-    
-    # Time grid for integration (normalized tau = t/t_peak)
-    tau = np.logspace(-3, 3, 1000) 
-    dtau = np.diff(tau)
-    tau_c = (tau[1:] + tau[:-1]) / 2
-    
-    for i, (th, a_n, a_e) in enumerate(zip(theta_vals, a_n_grid, a_e_grid)):
-        
-        # Pulse shape profiles
-        mask_rise = tau_c < 1.0
-        P_n = np.where(mask_rise, tau_c, tau_c**(-a_n))
-        P_e = np.where(mask_rise, 1.0,   tau_c**(-a_e))
-        
-        for j, Ep in enumerate(Ep_vals):
-            # E_p evolution
-            Ep_t = Ep * P_e
-            
-            # --- Fluence & T90 ---
-            flux_rate_E = P_n * int_4_alt(Ep_t)
-            fluence_cum = np.cumsum(flux_rate_E * dtau)
-            total_flu = fluence_cum[-1]
-            
-            idx_90 = np.searchsorted(fluence_cum, 0.9 * total_flu)
-            t90_val = tau_c[min(idx_90, len(tau_c)-1)]
-            
-            res_t90[i, j] = t90_val
-            res_flu[i, j] = total_flu
-            
-            # --- Peak Flux (64ms) ---
-            flux_rate_P = P_n * int_3_alt(Ep_t) * 6.2e8
-            cum_P = np.concatenate(([0], np.cumsum(flux_rate_P * dtau)))
-            
-            for k, tp in enumerate(tp_vals):
-                w = 0.064 / tp
-                # Scan around peak (tau=1)
-                t_scan = np.linspace(0, 10, 200)
-                t_end = t_scan + w
-                
-                C_start = np.interp(t_scan, tau, cum_P)
-                C_end   = np.interp(t_end, tau, cum_P)
-                
-                flux_window = (C_end - C_start) / w
-                res_pf[i, j, k] = np.max(flux_window)
-
-    interp_t90 = RegularGridInterpolator(
-        (theta_vals, np.log10(Ep_vals)), res_t90, bounds_error=False, fill_value=None
-    )
-    interp_flu = RegularGridInterpolator(
-        (theta_vals, np.log10(Ep_vals)), res_flu, bounds_error=False, fill_value=None
-    )
-    interp_pf = RegularGridInterpolator(
-        (theta_vals, np.log10(Ep_vals), np.log10(tp_vals)), res_pf, bounds_error=False, fill_value=None
-    )
-    
-    return interp_t90, interp_flu, interp_pf
 
 def load_redshift_data(
     data_dir: Path = Path("datafiles"),
@@ -287,9 +204,9 @@ def load_and_filter_redshifts(
 
 
 def initialize_simulation(
-        datafiles: Path         = Path("datafiles"), 
-        params: Dict[str, Any]  = DEFAULT_SPECTRAL_PARAMS,
-        size_test: int = 2_000
+        datafiles   : Path              = Path("datafiles"), 
+        params      : Dict[str, Any]    = DEFAULT_SPECTRAL_PARAMS,
+        size_test   : int = 2_000
     ) -> Tuple[SimParams, Interps, Dict[str, np.ndarray]]:
     """
     Initialize the Monte Carlo simulation by loading necessary data and computing integrals.
@@ -308,10 +225,9 @@ def initialize_simulation(
         data_dict (Dict[str, np.ndarray]): Dictionary of observable data.
     """
     # check if theta_c or theta_v_max exist if it is inside use that otherwise default to 20 max and 3.4 for theta_c
-    if "theta_c" not in params:
-        params["theta_c"] = 3.4
-    if "theta_v_max" not in params:
-        params["theta_v_max"] = 20.0
+    params_in   = DEFAULT_SPECTRAL_PARAMS.copy()
+    params_in.update(params)
+    params      = params_in
 
     rng = np.random.default_rng(SEED)
 
@@ -327,13 +243,8 @@ def initialize_simulation(
     cos_angle_min = np.cos(params["theta_v_max"] * deg_to_rad)
     theta_v = np.arccos(rng.uniform(cos_angle_min, 1, size=size_test))
     
-    int_0_alt, int_1_alt, int_2_alt, int_3_alt, int_4_alt, _ = create_integral_interpolators_alt(
+    int_0_alt, int_1_alt, int_2_alt, int_3_alt, int_4_alt, _ = create_integral_interpolators(
         alpha=alpha, beta_s=beta_s, n=n
-    )
-
-    interp_t90, interp_flu, interp_pf = create_temporal_interpolators(
-        int_3_alt, int_4_alt, alpha_n, alpha_e, 
-        theta_v_max=params["theta_v_max"] * deg_to_rad * 1.2
     )
 
     data_dict = catalogue_prep(datafiles=datafiles)
@@ -354,7 +265,7 @@ def initialize_simulation(
         alpha_e         = alpha_e(theta_v),
         R_F             = R_F(theta_v),
         R_E             = R_E(theta_v),
-        # New MRD-related fields
+        # MRD-related fields
         P_z_interp          = P_z_interp,
         z_grid              = z_grid,
         P_z_density         = P_z_density,
@@ -367,10 +278,7 @@ def initialize_simulation(
         int_1_alt   = int_1_alt,
         int_2_alt   = int_2_alt,
         int_3_alt   = int_3_alt,
-        int_4_alt   = int_4_alt,
-        interp_t90  = interp_t90,
-        interp_flu  = interp_flu,
-        interp_pf   = interp_pf,
+        int_4_alt   = int_4_alt
     )
 
     return default_params, default_interpolator, data_dict
@@ -396,11 +304,9 @@ def create_run_dir(run_name: str = 'run', use_timestamp : bool = False, output_f
 
     msg = f"Creating new directory : {output_files}"
 
-    if output_files.exists():
-       msg = f"Loading existing directory  : {output_files}"
+    if output_files.exists(): msg = f"Loading existing directory  : {output_files}"
     
-    if not QUIET_FLAG:
-        print(msg)
+    if not QUIET_FLAG: print(msg)
 
     output_files.mkdir(parents=True, exist_ok=True) # Create the directory if it doesn't exist
 
