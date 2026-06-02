@@ -1,4 +1,3 @@
-
 from math       import  inf
 from typing     import  Dict
 import          numpy   as np
@@ -78,7 +77,6 @@ def initialize_walkers(n_walkers, seed = 40, max_fj = 1.0, fj_bounds = None):
     sigma_E = np.random.uniform(0.2, 0.4, n_walkers)    # Moderate scatter
     L_mu_t  = np.random.uniform(-1, 0, n_walkers)       # Reasonable peak time
     sigma_t = np.random.uniform(0.5, 1, n_walkers)      # Moderate scatter in time  
-    #f_j     = np.random.uniform(0.4, max_fj, n_walkers)    # Reasonable fraction
     fj_bounds_considered = (0.4, max_fj) if fj_bounds is None else fj_bounds
     f_j     = np.random.uniform(fj_bounds_considered[0], fj_bounds_considered[1], n_walkers)  # Reasonable fraction
     walkers = np.column_stack((k, L_L0, L_mu_E, sigma_E, L_mu_t, sigma_t, f_j))  # Combine into a 2D array

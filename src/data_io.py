@@ -1,7 +1,8 @@
 import  numpy       as np
 import  pandas      as pd
+from    pathlib     import Path
 from    scipy       import interpolate
-from    typing      import Tuple, Callable, Dict
+from    typing      import Tuple, Callable, Optional
 from    .montecarlo  import DEFAULT_LIMITS
 
 def get_Rf_Re(filename: str) -> Tuple[Callable, Callable, np.ndarray]:
@@ -57,35 +58,64 @@ def get_alpha_n_alpha_e(file_n: str, file_e: str) -> Tuple[Callable, Callable, n
 
     return alpha_n, alpha_e, theta_v_arr_n, theta_v_arr_e
 
-def get_observables_data(filename: str) -> Dict[str, np.ndarray]:
+def load_structure_constants(
+    datafiles: Path,
+    structure_source: Optional[Path] = None,
+) -> Tuple[Callable, Callable, Callable, Callable, np.ndarray, np.ndarray]:
     """
-    Load constraints data from the specified file and return a dictionary containing observables.
+    Load structured-jet constants either from the legacy split files or from a
+    unified CSV file containing precomputed structure values.
 
     Parameters:
-        filename (str): Path to the constraints file.
+        datafiles (Path): Base data directory.
+        structure_source (Path, optional): Directory or CSV file containing the
+            custom structure constants. If omitted, the legacy files are loaded.
 
     Returns:
-        Dictionary with keys:
-          'epeak', 'epeak_err', 'duration', 'duration_err',
-          'pflux', 'pflux_err', 'fluence', 'fluence_err'.
+        R_F, R_E, alpha_n, alpha_e: Interpolators for the structure constants.
+        theta_rf, theta_alpha: Angle arrays used to build the interpolators.
     """
-    file_constraints = np.loadtxt(filename).T
-    pflux_data, duration_data, fluence_data, epeak_data = file_constraints 
+    if structure_source is None:
+        R_F, R_E, theta_rf = get_Rf_Re(datafiles / "F_Fmax_3.4_s4.0.txt")
+        alpha_n, alpha_e, theta_alpha_n, theta_alpha_e = get_alpha_n_alpha_e(
+            datafiles / "alpha.txt",
+            datafiles / "alpha_e.txt",
+        )
+        return R_F, R_E, alpha_n, alpha_e, theta_rf, theta_alpha_n
 
-    print(f"Loaded {len(epeak_data)} events from {filename}.")
-    # the bounds for the data
-    print(f"pflux: {np.min(pflux_data):.2e} - {np.max(pflux_data):.2e}")
-    print(f"duration: {np.min(duration_data):.2e} - {np.max(duration_data):.2e}")
-    print(f"fluence: {np.min(fluence_data):.2e} - {np.max(fluence_data):.2e}")
-    print(f"epeak: {np.min(epeak_data):.2e} - {np.max(epeak_data):.2e}")
+    structure_path = Path(structure_source)
+    if structure_path.is_dir():
+        preferred_csv = structure_path / "struct_results_100.csv"
+        if preferred_csv.exists():
+            structure_path = preferred_csv
+        else:
+            csv_files = sorted(structure_path.glob("struct_results_*.csv"))
+            if not csv_files:
+                raise FileNotFoundError(
+                    f"No structure CSV files were found in {structure_path}"
+                )
+            structure_path = csv_files[0]
 
+    if structure_path.suffix.lower() != ".csv":
+        raise ValueError(
+            f"Unsupported structure source {structure_path}. Provide a directory or a CSV file."
+        )
 
-    return {
-        "epeak"         : epeak_data,
-        "duration"      : duration_data,
-        "pflux"         : pflux_data,
-        "fluence"       : fluence_data,
-    }
+    structure_df = pd.read_csv(structure_path)
+    required_columns = {"theta_v", "R_E", "R_F", "alpha_E", "alpha_N"}
+    missing_columns = required_columns.difference(structure_df.columns)
+    if missing_columns:
+        raise ValueError(
+            f"Structure file {structure_path} is missing columns: {sorted(missing_columns)}"
+        )
+
+    theta_v = structure_df["theta_v"].to_numpy()
+    R_F = interpolate.interp1d(theta_v, structure_df["R_F"].to_numpy(), fill_value="extrapolate")
+    R_E = interpolate.interp1d(theta_v, structure_df["R_E"].to_numpy(), fill_value="extrapolate")
+    alpha_n = interpolate.interp1d(theta_v, structure_df["alpha_N"].to_numpy(), fill_value="extrapolate")
+    alpha_e = interpolate.interp1d(theta_v, structure_df["alpha_E"].to_numpy(), fill_value="extrapolate")
+
+    return R_F, R_E, alpha_n, alpha_e, theta_v, theta_v
 
 def get_redshift_distribution(filename: str) -> np.ndarray:
     """

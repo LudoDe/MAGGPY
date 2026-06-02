@@ -4,45 +4,9 @@ posteriors.py - Posterior Predictive Checks Module
 This module provides helper functions to produce, store and read observables. 
 """
 
-import pickle
 import numpy        as np
-from dataclasses    import dataclass
-from .montecarlo    import make_observations, DEFAULT_LIMITS, N_SIMS, make_observations_with_iso
+from .montecarlo    import DEFAULT_LIMITS, N_SIMS, make_observations_with_iso
 from typing         import Any, Dict, List
-
-@dataclass
-class SimulationResults:
-    """Store simulation results with variable length arrays"""
-    data: Dict[str, List[np.ndarray]]
-    
-    def __init__(self, data: Dict[str, List[np.ndarray]]):
-        self.data = data
-
-    def save(self, filename: str):
-        """Save results to pickle file"""
-        with open(filename, 'wb') as f:
-            pickle.dump(self.data, f)
-    
-    def __str__(self):
-        return f"SimulationResults({self.data.keys})"
-
-    @classmethod
-    def load(cls, filename: str) -> 'SimulationResults':
-        """Load results from pickle file"""
-        with open(filename, 'rb') as f:
-            data = pickle.load(f)
-        return cls(data)
-    
-    @classmethod
-    def load_and_flatten(cls, filename: str) -> 'SimulationResults':
-        """Load results from pickle file and flatten arrays"""
-        with open(filename, 'rb') as f:
-            data = pickle.load(f)
-        for key, value in data.items():
-            if key == "c_det":
-                continue
-            data[key] = np.concatenate(value)
-        return cls(data)
 
 def extract_samples_and_calculate_cdfs(
     sampler                 : Any,

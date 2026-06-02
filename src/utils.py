@@ -1,9 +1,7 @@
 import time
 import numpy as np
 from functools  import wraps
-from itertools  import zip_longest
 from typing     import Any, Callable, Tuple
-from scipy      import integrate, interpolate
 
 def timer_decorator(func: Callable) -> Callable:
     """
