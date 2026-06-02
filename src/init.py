@@ -12,7 +12,7 @@ from scipy              import integrate
 from .montecarlo        import SimParams, Interps
 from .spectral_models   import broken_power_law, DEFAULT_SPECTRAL_PARAMS
 from typing             import Any, Callable, Dict, Optional, Tuple
-from .data_io           import get_Rf_Re, get_alpha_n_alpha_e, get_redshift_distribution, catalogue_prep
+from .data_io           import load_structure_constants, get_redshift_distribution, catalogue_prep
 from .redshift          import get_mrd_redshift_distribution
 from scipy.interpolate  import interp1d
 
@@ -202,10 +202,10 @@ def load_and_filter_redshifts(
     z_arr, _, _, _, _ = load_redshift_data(data_dir, params)
     return z_arr
 
-
 def initialize_simulation(
         datafiles   : Path              = Path("datafiles"), 
         params      : Dict[str, Any]    = DEFAULT_SPECTRAL_PARAMS,
+    structure_source : Optional[Path] = None,
         size_test   : int = 2_000
     ) -> Tuple[SimParams, Interps, Dict[str, np.ndarray]]:
     """
@@ -217,6 +217,9 @@ def initialize_simulation(
             - alpha, beta_s, n: Spectral parameters
             - theta_c, theta_v_max: Jet geometry
             - z_model (optional): Name of redshift population model
+        structure_source (Path, optional): Directory or CSV file containing
+            custom structured-jet constants. If omitted, the legacy split files
+            are used.
         size_test (int): Number of viewing angles to generate.
 
     Returns:
@@ -238,8 +241,8 @@ def initialize_simulation(
         datafiles, params, rng
     )
 
-    R_F, R_E, _ = get_Rf_Re(datafiles / 'F_Fmax_3.4_s4.0.txt')
-    alpha_n, alpha_e, _, _ = get_alpha_n_alpha_e(datafiles / 'alpha.txt', datafiles / 'alpha_e.txt')
+    R_F, R_E, alpha_n, alpha_e, _, _ = load_structure_constants(datafiles, structure_source)
+    
     cos_angle_min = np.cos(params["theta_v_max"] * deg_to_rad)
     theta_v = np.arccos(rng.uniform(cos_angle_min, 1, size=size_test))
     

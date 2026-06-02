@@ -589,3 +589,99 @@ def generate_grb_population(
         'n_detected'            : obs['triggered_events'],
         'isotropic_energy_det'  : obs['isotropic_energy_det'],
     }
+
+
+def generate_macro_properties_catalogue(thetas : list, params : SimParams, interps :Interps, n_counts_new : int) -> dict:
+    """
+    Generate macro properties for GRB samples (Modified to return E_p_hat).
+    """
+    k_pl, L_L0, L_mu_E_10, sigma_E_10, L_mu_tau_10, sigma_tau_10, _ = thetas # fj unused
+
+    rng         = params.rng
+
+    idx         = rng.integers(low = 0, high = len(params.z_corr), size = n_counts_new) 
+    geometry    = params.geometric_factors[idx] # 4 pi DL^2 * (1 - cos(theta_c))
+    one_plus_z  = params.z_corr[idx] # 1 + z
+
+    l_10        = np.log(10)
+    t_peak      = rng.lognormal(mean=L_mu_tau_10 * l_10, sigma=sigma_tau_10  * l_10, size=n_counts_new) 
+    E_p_hat     = rng.lognormal(mean=L_mu_E_10   * l_10, sigma=sigma_E_10    * l_10, size=n_counts_new) 
+
+    idtheta     = rng.integers(low = 0, high = len(params.theta_v), size = n_counts_new) 
+    R_E_theta   = params.R_E[idtheta] 
+    R_F_theta   = params.R_F[idtheta]
+
+    L_arr       = l_random_new(k_pl, n_counts_new, rng = rng) 
+
+    E_p_obs     = R_E_theta * E_p_hat / one_plus_z
+    I1          = 1.15739   * t_peak * interps.int_0_alt(E_p_hat) # Approximate
+    N0          = 1e49      * 10**L_L0 * L_arr * geometry / I1
+    
+    F_0         = N0  * (one_plus_z)**2 * R_F_theta
+    F_P_real    = F_0 * interps.int_3_alt( E_p_obs ) * 6.2e8 # peak flux in 50-300 keV (BATSE) 1 erg to keV
+
+    return {
+        "t_peak_c_z"        : one_plus_z * t_peak,
+        "F_p_real"          : F_P_real,
+        "F_0"               : F_0,
+        "E_p_obs"           : E_p_obs,
+        "R_F_theta"         : R_F_theta,
+        "alpha_e"           : params.alpha_e[idtheta], 
+        "alpha_n"           : params.alpha_n[idtheta],
+        "z"                 : one_plus_z - 1, 
+        "theta_v"           : params.theta_v[idtheta], 
+        "isotropic_energy"  : 1e49 * 10**L_L0 * L_arr / (1 - np.cos(params.theta_c)),
+        "isotropic_energy_w_structure"  : 1e49 * 10**L_L0 * L_arr * R_F_theta / (1 - np.cos(params.theta_c)),
+        "E_p_hat"           : E_p_hat # Added this (Rest frame on axis)
+    }
+
+def generate_catalogue(
+        thetas, 
+        params : SimParams, 
+        interps : Interps, 
+        n_years : float = 10
+    ):
+    
+    # Calculate number of events to simulate
+    fj                      = thetas[-1]
+    GBM_eff                 = 0.6
+    geometric_efficiency    = 1 - np.cos(params.theta_v_max)
+    total_bns_all_sky       = n_years * len(params.z_arr)
+    available_events        = total_bns_all_sky * geometric_efficiency * GBM_eff * fj
+    n_events                = int(available_events)
+    
+    print(f"Simulating {n_events} events for {n_years} years...")
+
+    # Generate properties
+    m_prop                  = generate_macro_properties_catalogue(thetas, params, interps, n_events)
+
+    # Compute observables for ALL events (no cuts)
+    P_F_64ms_50_300         = compute_Fp_64_ms_optimized(m_prop, interps)
+    t_90_array, f_det_in    = compute_time_evolution(m_prop, interps)
+    
+    # Prepare dictionary for calculate_isotropic_luminosity
+    temp_obs = {
+        "z_det" : m_prop["z"],
+        "f_det" : f_det_in,
+        "t_det" : t_90_array,
+        "Ep_det": m_prop["E_p_obs"]
+    }
+    E_iso_det, _ = calculate_isotropic_luminosity(temp_obs, interps)
+
+    # Construct the catalogue dictionary
+    catalogue = {
+        "Ep_detected"       : m_prop["E_p_obs"],
+        "Ep_rest"           : m_prop["E_p_hat"], # Rest frame on axis
+        "pflux"             : m_prop["F_p_real"], # True peak flux
+        "pflux64ms"         : P_F_64ms_50_300,
+        "fluence"           : f_det_in,
+        "E_iso"             : m_prop["isotropic_energy"], # True E_iso
+        "E_iso_structure"   : m_prop["isotropic_energy_w_structure"], # True E_iso with structure
+        "E_iso_recovered"   : E_iso_det,
+        "z"                 : m_prop["z"],
+        "theta"             : m_prop["theta_v"],
+        "t90"               : t_90_array,
+        "t_peak"            : m_prop["t_peak_c_z"], # Detected peak time (with redshift)
+    }
+    
+    return catalogue

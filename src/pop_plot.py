@@ -2,16 +2,6 @@
 pop_plot.py
 ==========================
 Centralized module for GW population analysis, data preprocessing, and visualization.
-
-Usage:
-    from src.population_plots import PopulationAnalysis
-    
-    pop = PopulationAnalysis(output_folder="path/to/output", images_folder="path/to/images")
-    pop.run_preprocessing()
-    pop.plot_combined_analysis()
-    pop.plot_fj_violins()
-    pop.plot_sgrb_rate_posteriors()
-    pop.get_physical_models_list()
 """
 
 import json
@@ -27,7 +17,6 @@ from pathlib import Path
 from scipy.stats import gaussian_kde
 from matplotlib.ticker import LogLocator, ScalarFormatter
 from typing import Dict, List, Any
-
 
 def draw_vertical_violin(ax, data, x_pos, y_base, color, width=0.1, min_val=0, max_val=10):
     """Draws a vertical violin plot for a given distribution."""
@@ -282,13 +271,6 @@ class PopulationAnalysis:
         # from self.model_dic which is just the same as ordered_model_dict get the model names (keys)
         models = self.model_dic.keys()
 
-        #models = self.unique_models
-        
-        #print(self.unique_models, models)
-        # juet get the keys from sorted model dict like "fiducial_Hrad"
-        #models = ordered_model_dict.values()
-        #print(self.unique_models, models)
-
         alphas = self.DEFAULT_ALPHA_KEYS
         
         y_step = 1.15
@@ -342,7 +324,6 @@ class PopulationAnalysis:
 
         self._save_plot(filename)
         plt.show()
-
 
     def plot_sgrb_rate_posteriors(self, filename="sgrb_rate_posteriors"):
         fig, ax = plt.subplots(figsize=(10, 7))
