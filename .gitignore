@@ -26,7 +26,8 @@ env/
 .vscode/   
 .vscode/*
 
-
+src/neutrino.py
+Tutorials_ACME/tutorial2.2_structured_jet.ipynb
 *MonteCarlo_Ind*
 
 Notebooks_for_historical_reference/

@@ -666,7 +666,7 @@ def generate_catalogue(
         "t_det" : t_90_array,
         "Ep_det": m_prop["E_p_obs"]
     }
-    E_iso_det, _ = calculate_isotropic_luminosity(temp_obs, interps)
+    E_iso_det, L_iso_det = calculate_isotropic_luminosity(temp_obs, interps)
 
     # Construct the catalogue dictionary
     catalogue = {
@@ -678,6 +678,7 @@ def generate_catalogue(
         "E_iso"             : m_prop["isotropic_energy"], # True E_iso
         "E_iso_structure"   : m_prop["isotropic_energy_w_structure"], # True E_iso with structure
         "E_iso_recovered"   : E_iso_det,
+        "L_iso_recovered"   : L_iso_det,
         "z"                 : m_prop["z"],
         "theta"             : m_prop["theta_v"],
         "t90"               : t_90_array,
