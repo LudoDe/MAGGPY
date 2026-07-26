@@ -41,7 +41,14 @@ def get_mrd_redshift_distribution(
                 population / alpha / component / filename)
     
     if not mrd_path.exists():
-        raise FileNotFoundError(f"MRD file not found: {mrd_path}")
+        # check if maybe a single txt file exists in the directory
+        possible_alternatives = list((datafiles / "populations" / "MRD" / f"output_sigma{sigma}" / population / alpha / component).glob("*.dat"))
+        print(f"Warning: MRD file not found at {mrd_path}. Checking for alternatives in the directory...")
+        if possible_alternatives:
+            mrd_path = possible_alternatives[0]
+            print(f"Warning: MRD file not found at {mrd_path}. Using alternative file: {mrd_path}")
+        else:
+            raise FileNotFoundError(f"MRD file not found: {mrd_path}")
     
     # Load MRD data: z and R(z) in Gpc^-3 yr^-1
     z_mrd, mrd = np.loadtxt(mrd_path, unpack=True)

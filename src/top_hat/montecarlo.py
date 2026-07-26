@@ -6,7 +6,7 @@ import numpy as np
 import scipy.special as sc
 from scipy.stats import gengamma, cramervonmises_2samp, lognorm
 from scipy.integrate import quad
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, RegularGridInterpolator
 from astropy.cosmology import Planck18, FlatLambdaCDM
 from math import inf
 import emcee
@@ -63,21 +63,49 @@ def create_k_interpolator(params = DEFAULT_SPECTRAL_PARAMS, E_p_range=(50, 10_00
         for j, z in enumerate(z_grid):
             k_factor_grid[i, j] = k_factor(E_p, z)
 
-    return RectBivariateSpline(log_E_p_grid, z_grid, k_factor_grid, kx=3, ky=3)
+    return RegularGridInterpolator(
+        (log_E_p_grid, z_grid),
+        k_factor_grid,
+        method="linear",
+        bounds_error=False,
+        fill_value=None,
+    )
+
+#k_grid = k_spline(logEp_grid, z_grid, grid=True)
+#rgi_linear = RegularGridInterpolator(
+#    (logEp_grid, z_grid),
+#    k_grid,
+#    method="linear",
+#    bounds_error=False,
+#    fill_value=None,
+#)
+
+    #return RectBivariateSpline(log_E_p_grid, z_grid, k_factor_grid, kx=3, ky=3)
 
 
 # =============================================================================
 # Core Monte Carlo Functions
 # =============================================================================
 
-def luminosity_gen(A, n, rng=None):
-    """Generate luminosities from modified Schechter distribution (Salafia et al 2024)."""
-    return gengamma.rvs(a=(A - 1)/A, c=-A, size=n, random_state=rng)
+#def luminosity_gen(A, n, rng=None):
+#    """Generate luminosities from modified Schechter distribution (Salafia et al 2024)."""
+#    return gengamma.rvs(a=(A - 1)/A, c=-A, size=n, random_state=rng)
+
+def lognormal_numpy(mu, sigma, n, rng):
+    l10 = np.log(10)
+    return rng.lognormal(
+        mean=mu*l10,
+        sigma=sigma*l10,
+        size=n
+    )
+
+def luminosity_gen(A, n, rng):
+    shape = (A - 1)/A
+    return rng.gamma(shape, size=n)**(-1/A)
 
 def compute_luminosity_distance(z, cosmology=None):
     """Compute luminosity distance in cm."""
-    if cosmology is None:
-        cosmology = FlatLambdaCDM(H0=Planck18.H0, Om0=Planck18.Om0)
+    if cosmology is None: cosmology = FlatLambdaCDM(H0=Planck18.H0, Om0=Planck18.Om0)
     return cosmology.luminosity_distance(z).cgs.value
 
 def simplified_montecarlo(thetas, n_events, params_in, distances, k_interpolator, rng=None):
@@ -92,21 +120,20 @@ def simplified_montecarlo(thetas, n_events, params_in, distances, k_interpolator
     """
     A_index, L_L0, L_mu_E_10, sigma_E_10 = thetas[:4]
 
-    if rng is None:
-        rng = params_in.rng
-
-    l_10 = np.log(10)
-    
     L_obs_iso = luminosity_gen(A_index, n_events, rng=rng) * 10**(L_L0 + 49)
-    E_p_rest = rng.lognormal(mean=L_mu_E_10 * l_10, sigma=sigma_E_10 * l_10, size=n_events)
+    #E_p_rest = rng.lognormal(mean=L_mu_E_10 * l_10, sigma=sigma_E_10 * l_10, size=n_events)
+    E_p_rest = lognormal_numpy(L_mu_E_10, sigma_E_10, n_events, rng=rng)
 
-    id_z = rng.integers(low=0, high=len(params_in.z_arr), size=n_events)
-    z_arr = params_in.z_arr[id_z]
-    d_L_sq = distances[id_z]**2
+    id_z    = rng.integers(low=0, high=len(params_in.z_arr), size=n_events)
+    z_arr   = params_in.z_arr[id_z]
+    d_L_sq  = distances[id_z]**2
     E_p_obs = E_p_rest / (1 + z_arr)
 
-    k_corr = k_interpolator.ev(np.log10(E_p_obs), z_arr)
-    p_flux = L_obs_iso / (4 * np.pi * d_L_sq * k_corr) * 6.242e8
+    #k_corr  = k_interpolator.ev(np.log10(E_p_obs), z_arr)
+    pts = np.column_stack((np.log10(E_p_obs), z_arr))
+    k_corr = k_interpolator(pts)
+    
+    p_flux  = L_obs_iso / (4 * np.pi * d_L_sq * k_corr) * 6.242e8
 
     return {
         "p_flux": p_flux,
@@ -208,7 +235,7 @@ def _calculate_geometric_efficiency_lognormal_raw(theta_c_med_10, sigma_theta_c=
 
 
     theta_c_min = 1
-    theta_c_max = 90
+    theta_c_max = 45
 
     cdf_max = lognorm.cdf(theta_c_max, s=shape, scale=scale)
     cdf_min = lognorm.cdf(theta_c_min, s=shape, scale=scale)
@@ -281,7 +308,7 @@ def create_log_probability_function(log_prior_func, log_likelihood_func, params_
     
     return log_probability
 
-
+import zeus
 def run_mcmc(log_probability_func, initial_walkers, n_iterations, n_walkers, n_params,
              backend, blobs_dtype=None, moves=None, pool=None, progress=True):
     """
@@ -341,13 +368,13 @@ def run_mcmc(log_probability_func, initial_walkers, n_iterations, n_walkers, n_p
     return sampler
 
 
-def check_and_resume_mcmc(filename, n_steps, initialize_walkers_func, n_walkers):
+def check_and_resume_mcmc(filename, n_steps, starting_point, n_walkers):
     backend = emcee.backends.HDFBackend(filename)
 
     # invert the logic for more readability
     if not filename.exists():
-        initial_walkers = initialize_walkers_func(n_walkers)
-        print("Starting new run")
+        initial_walkers = starting_point
+        print("Starting new run from starting point")
         return initial_walkers, n_steps, backend
     
     initial_walkers = backend.get_last_sample()

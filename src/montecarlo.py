@@ -977,7 +977,6 @@ def make_observations_with_iso(
 
     return obs
 
-
 def generate_grb_population(
         thetas: list,
         params: SimParams,

@@ -288,7 +288,7 @@ def load_and_filter_redshifts(
 def initialize_simulation(
         datafiles: Path         = Path("datafiles"), 
         params: Dict[str, Any]  = DEFAULT_SPECTRAL_PARAMS,
-        size_test: int = 2_000
+        size_test: int          = 2_000
     ) -> Tuple[SimParams, Interps, Dict[str, np.ndarray]]:
     """
     Initialize the Monte Carlo simulation by loading necessary data and computing integrals.
@@ -308,8 +308,13 @@ def initialize_simulation(
     """
     rng = np.random.default_rng(SEED)
 
+
+    # check if theta_c or theta_v_max exist if it is inside use that otherwise default to 20 max and 3.4 for theta_c
+    params = DEFAULT_SPECTRAL_PARAMS | params  # Merge with defaults, allowing overrides
+    
     deg_to_rad = np.pi / 180
     alpha, beta_s, n = params["alpha"], params["beta_s"], params["n"]
+
 
     z_arr, P_z_interp, total_rate, local_rate, z_grid, P_z_density = load_redshift_data(
         datafiles, params, rng

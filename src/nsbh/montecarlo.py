@@ -36,12 +36,12 @@ from ..top_hat.montecarlo import (
     create_k_interpolator,
     create_geometric_efficiency_lognormal_interpolator,
 )
-from .init import NSBHData
+#from .init import NSBHData
 
 
 # ── Constants ───────────────────────────────────────────────────────────────
-GBM_EFF        = 0.6       # GBM sky fraction
-FJ_NSBH_FIXED  = 1       # Fixed NSBH jet-launching fraction (prefactor)
+GBM_EFF        = 0.6        # GBM sky fraction
+FJ_NSBH_FIXED  = 1          # Fixed NSBH jet-launching fraction (prefactor)
 N_MC_EVENTS    = 10_000     # MC draw size per population
 
 # ══════════════════════════════════════════════════════════════════════════════

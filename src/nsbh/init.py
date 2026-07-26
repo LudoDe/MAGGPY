@@ -12,15 +12,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Callable, Dict
+
+import astropy.units as u
+import pandas as pd
+
+from astropy.cosmology import Planck18
+from scipy.interpolate import interp1d
 
 import numpy as np
-
-from ..montecarlo import SimParams, Interps
-from ..spectral_models import DEFAULT_SPECTRAL_PARAMS
-from ..init import initialize_simulation as _init_bns
-from ..redshift import get_mrd_redshift_distribution, sample_from_mrd
-from ..top_hat.montecarlo import compute_luminosity_distance
+from ..redshift             import sample_from_mrd
+from ..top_hat.montecarlo   import compute_luminosity_distance
+from ..data_io              import catalogue_prep
 
 SEED = 42
 
@@ -29,149 +32,171 @@ SEED = 42
 # NSBH data container
 # ---------------------------------------------------------------------------
 @dataclass
-class NSBHData:
-    """
-    Holds NSBH (BHNSs) population data for the top-hat combined model.
+class MRDSelection:
+    """Exact identification of one exported MRD curve."""
+    population: str
+    alpha: str
+    series: str
 
-    Fields
-    ------
-    z_arr             : 1-year sample of NSBH merger redshifts
-    distances         : luminosity distances in cm (one per z_arr entry)
+    @property
+    def filename(self) -> str:
+        alpha_token = self.alpha.replace(".", "_")
+        return f"{self.population}_{alpha_token}_{self.series}.csv"
 
-    # MRD information
-    P_z_interp, total_merger_rate, local_rate, z_grid, P_z_density
-    """
+@dataclass
+class PopulationData:
+    """MRD and Monte Carlo data shared by BNS and NSBH populations."""
+    """Exact identification of one exported MRD curve."""
+    selection: MRDSelection
+    source_file: Path
+    # Fixed Monte Carlo sample
     z_arr               : np.ndarray
     distances           : np.ndarray
 
-    # MRD-derived quantities
-    P_z_interp          : Callable
-    total_merger_rate   : float
-    local_rate          : float
-    z_grid              : np.ndarray
-    P_z_density         : np.ndarray
+    # Underlying MRD
+    z_grid: np.ndarray
+    mrd_density: np.ndarray
 
+    # Observer-frame redshift distribution
+    P_z_interp: Callable
+    P_z_density: np.ndarray
+    total_merger_rate: float
 
-# ---------------------------------------------------------------------------
-# Helper: build NSBHData from an MRD file
-# ---------------------------------------------------------------------------
-def _load_nsbh_population(
-    datafiles   : Path,
-    population  : str,
-    alpha       : str,
-    sigma       : float = 0.1,
-) -> NSBHData:
-    """
-    Load the BHNSs merger-rate density for *one* population model and
-    return an ``NSBHData`` container.
-    """
-    # 1. MRD distribution
-    P_z_interp, total_rate, local_rate, z_grid, P_z_density = (
-        get_mrd_redshift_distribution(
-            datafiles   = datafiles,
-            population  = population,
-            alpha       = alpha,
-            component   = "BHNSs",
-            sigma       = sigma,
+    # Lowest-redshift MRD point
+    local_rate: float
+    local_redshift: float
+
+def load_population(
+    mrd_directory: Path,
+    selection: MRDSelection,
+    n_samples: int,
+    rng: np.random.Generator,
+) -> PopulationData:
+    """Load one exported MRD curve and construct its observer-frame P(z)."""
+
+    mrd_path = Path(mrd_directory) / selection.filename
+
+    if not mrd_path.is_file():
+        raise FileNotFoundError(
+            f"MRD file not found for {selection}: {mrd_path}"
         )
+
+    frame       = pd.read_csv(mrd_path)
+    # first col is redshift, second col is MRD in Gpc^-3 yr^-1
+    z_grid      = frame["redshift"].to_numpy(float)
+    mrd_density = frame["MRD_Gpc-3_yr-1"].to_numpy(float)
+
+    if np.any(np.diff(z_grid) <= 0): raise ValueError(f"MRD redshifts are not strictly increasing: {mrd_path}")
+
+    # Full-sky differential comoving volume in Gpc^3 per unit redshift.
+    dVc_dz = (
+        Planck18
+        .differential_comoving_volume(z_grid)
+        .to_value(u.Gpc**3 / u.sr)
+        * 4.0
+        * np.pi
     )
 
-    # 2. Draw 1-year redshift sample via inverse-CDF
-    rng = np.random.default_rng(SEED)
-    n_samples = int(total_rate)  #? Number of events in 1 year = total merger rate
-    z_arr = sample_from_mrd(P_z_interp, z_grid, P_z_density, n_samples, rng=rng)
+    # Observer-frame rate:
+    # dN/dz = R(z) [dVc/dz] / (1 + z)
+    dN_dz = mrd_density * dVc_dz / (1.0 + z_grid)
 
-    # 3. Pre-compute luminosity distances (cm)
+    total_rate = float(np.trapezoid(dN_dz, z_grid))
+
+    if not np.isfinite(total_rate) or total_rate <= 0:
+        raise ValueError(
+            f"Integrated merger rate is invalid for {mrd_path}: {total_rate}"
+        )
+
+    P_z_density = dN_dz / total_rate
+
+    P_z_interp = interp1d(
+        z_grid,
+        P_z_density,
+        kind="linear",
+        bounds_error=False,
+        fill_value=0.0,
+        assume_sorted=True,
+    )
+
+    z_arr = sample_from_mrd(
+        P_z_interp,
+        z_grid,
+        P_z_density,
+        n_samples,
+        rng=rng,
+    )
+
     distances = compute_luminosity_distance(z_arr)
 
-    return NSBHData(
-        z_arr             = z_arr,
-        distances         = distances,
-        P_z_interp        = P_z_interp,
-        total_merger_rate = total_rate,
-        local_rate        = local_rate,
-        z_grid            = z_grid,
-        P_z_density       = P_z_density,
+    return PopulationData(
+        selection=selection,
+        source_file=mrd_path,
+        z_arr=z_arr,
+        distances=distances,
+        z_grid=z_grid,
+        mrd_density=mrd_density,
+        P_z_interp=P_z_interp,
+        P_z_density=P_z_density,
+        total_merger_rate=total_rate,
+        local_rate=float(mrd_density[0]),
+        local_redshift=float(z_grid[0]),
     )
 
-
-# ---------------------------------------------------------------------------
-# Main initialisation entry-point
-# ---------------------------------------------------------------------------
 def initialize_combined_simulation(
-    datafiles       : Path           = Path("datafiles"),
-    params          : Dict[str, Any] = DEFAULT_SPECTRAL_PARAMS,
-    size_test       : int            = 2_000,
-    nsbh_population : Optional[str]  = None,
-    nsbh_alpha      : Optional[str]  = None,
-    sigma           : float          = 0.1,
-) -> Tuple[SimParams, NSBHData, Dict[str, np.ndarray]]:
-    """
-    Initialise the combined BNS + NSBH top-hat simulation.
+    datafiles       : Path = Path("datafiles"),
+    population      : str = "delayed",
+    alpha           : str = "A1.0",
+    nsbh_series     : str = "NSBH_DD2_uniform_chi_0_1",
+    sample_size     : int = 2_000,
+    seed            : int = SEED,
+) -> tuple[PopulationData, PopulationData, Dict[str, np.ndarray]]:
+    """Initialize matching BNS and NSBH top-hat populations."""
 
-    Parameters
-    ----------
-    datafiles : Path
-        Root data directory.
-    params : dict
-        Spectral / geometry parameters (passed to the BNS init).
-    size_test : int
-        Number of BNS viewing-angle samples.
-    nsbh_population : str or None
-        Population model name for BHNSs (e.g. ``"fiducial_Hrad"``).
-        If *None*, inferred from ``params["z_model"]``.
-    nsbh_alpha : str or None
-        Alpha parameter for BHNSs (e.g. ``"A1.0"``).
-        If *None*, inferred from ``params["z_model"]``.
-    sigma : float
-        MRD sigma parameter (default 0.1).
+    datafiles       = Path(datafiles)
+    mrd_directory   = datafiles / "MRD_outputs"
 
-    Returns
-    -------
-    bns_params : SimParams
-        Standard BNS simulation parameters (from top-hat init).
-    nsbh_data  : NSBHData
-        NSBH population container.
-    data_dict  : dict
-        Observed catalogue data.
-    """
-    import re
+    # Independent, reproducible random streams.
+    bns_seed, nsbh_seed = np.random.SeedSequence(seed).spawn(2)
+    bns_rng     = np.random.default_rng(bns_seed)
+    nsbh_rng    = np.random.default_rng(nsbh_seed)
 
-    # ── 1. Standard BNS initialisation (top-hat pipeline) ───────────────────
-    bns_params, interps, data_dict = _init_bns(
-        datafiles=datafiles, params=params, size_test=size_test
+    bns_selection = MRDSelection(
+        population=population,
+        alpha=alpha,
+        series="BNS",
     )
 
-    # ── 2. Resolve NSBH population / alpha from z_model if not given ────────
-    if nsbh_population is None or nsbh_alpha is None:
-        z_model = params.get("z_model", None)
-        if z_model is not None:
-            alpha_match = re.search(r"_(A\d+\.?\d*)$", z_model)
-            if alpha_match:
-                if nsbh_alpha is None:
-                    nsbh_alpha = alpha_match.group(1)
-                if nsbh_population is None:
-                    nsbh_population = z_model[: alpha_match.start()]
-
-    # Fall back to defaults
-    if nsbh_population is None:
-        print("Warning: NSBH population not specified, defaulting to 'fiducial_Hrad'")
-        nsbh_population = "fiducial_Hrad"
-    if nsbh_alpha is None:
-        print("Warning: NSBH alpha not specified, defaulting to 'A1.0'")
-        nsbh_alpha = "A1.0"
-
-    # ── 3. Load NSBH population ─────────────────────────────────────────────
-    nsbh_data = _load_nsbh_population(
-        datafiles   = datafiles,
-        population  = nsbh_population,
-        alpha       = nsbh_alpha,
-        sigma       = sigma,
+    nsbh_selection = MRDSelection(
+        population=population,
+        alpha=alpha,
+        series=nsbh_series,
     )
 
-    print(f"NSBH population: {nsbh_population} / {nsbh_alpha}")
-    print(f"  BHNSs local rate R_0 = {nsbh_data.local_rate:.1f} Gpc^-3 yr^-1")
-    print(f"  BHNSs total rate     = {nsbh_data.total_merger_rate:.0f} yr^-1")
-    print(f"  1-year z sample size = {len(nsbh_data.z_arr)}")
+    bns_data = load_population(
+        mrd_directory=mrd_directory,
+        selection=bns_selection,
+        n_samples=sample_size,
+        rng=bns_rng,
+    )
 
-    return bns_params, nsbh_data, data_dict
+    nsbh_data = load_population(
+        mrd_directory=mrd_directory,
+        selection=nsbh_selection,
+        n_samples=sample_size,
+        rng=nsbh_rng,
+    )
+
+    # Observational GBM catalogue. This is not population-specific.
+    observations = catalogue_prep(datafiles=datafiles)
+
+    for data in (bns_data, nsbh_data):
+        print(
+            f"{data.selection.series}: "
+            f"R(z={data.local_redshift:.3g})="
+            f"{data.local_rate:.2f} Gpc^-3 yr^-1; "
+            f"all-sky rate={data.total_merger_rate:.3e} yr^-1; "
+            f"MC sample={len(data.z_arr)}"
+        )
+
+    return bns_data, nsbh_data, observations
