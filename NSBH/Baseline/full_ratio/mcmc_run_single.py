@@ -1,19 +1,3 @@
-"""Full BNS+NSBH likelihood runner with fixed jet fraction and geometry.
-
-This module deliberately does not read a BNS-only chain.  Every run starts
-from the explicit flat priors below and evaluates the joint observable-shape
-(Cramer-von Mises) and event-count (Poisson) likelihood.
-
-The fixed run configuration is
-
-* ``fj_bns``: BNS jet-production fraction;
-* ``geom_eff_func``: geometric-efficiency prescription;
-* ``alpha`` and ``nsbh_population``: population-synthesis choices.
-
-The six sampled parameters are ``A_index``, ``L_L0``, ``L_mu_E``,
-``sigma_E``, ``theta_c_bns`` and ``theta_c_nsbh``.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,6 +8,7 @@ import emcee
 import matplotlib.pyplot as plt
 import numpy as np
 
+import src.init
 from src.nsbh.init import initialize_combined_simulation
 from src.nsbh.montecarlo import FJ_NSBH_FIXED, GBM_EFF, N_MC_EVENTS
 from src.top_hat.montecarlo import (
@@ -36,17 +21,16 @@ from src.top_hat.montecarlo import (
     score_func_cvm,
     simplified_montecarlo,
 )
-
 from src_local.shared_functions import (
-    _backend_path, _geometry_name, N_PARAMS, 
+    _backend_path, _geometry_name, 
     _bad_likelihood, _make_initial_walkers, BLOBS_DTYPE,
     flat_prior
 )
 
-
 DATAFILES   = Path("../..../datafiles")
 
-PARAMETER_NAMES = (
+# All available parameters
+ALL_PARAMETER_NAMES = (
     "A_index",
     "L_L0",
     "log10_kappa_nsbh",
@@ -56,6 +40,31 @@ PARAMETER_NAMES = (
     "theta_c_nsbh",
 )
 
+# Spectral parameters that are fixed in the current analysis
+FIXED_PARAMETER_NAMES = (
+    "A_index", 
+    "L_mu_E",
+    "sigma_E",
+)
+
+# BNS only parameters, we fix fj_bns
+BNS_ONLY_PARAMETER_NAMES = (
+    "A_index",
+    "L_L0",
+    "L_mu_E",
+    "sigma_E",
+    "theta_c_bns",
+)
+
+# NSBH + BNS parameters, not including the fixed parameters
+BNS_NSBH_PARAMETER_NAMES = (
+    "L_L0",
+    "log10_kappa_nsbh",
+    "theta_c_bns",
+    "theta_c_nsbh",
+)
+
+N_PARAMS_SINGLE = 5
 LABELS = (
     r"$A$",
     r"$\log_{10}(L_0)$",
@@ -66,6 +75,20 @@ LABELS = (
     r"$\theta_c^{\mathrm{NSBH}}$ [deg]",
 )
 
+# Open bounds, matching the support used by the original complete runner.
+PRIOR_BOUNDS = np.asarray(
+    [
+        (1.5, 6),       # A
+        (-2.0, 7.0),    # L_L0
+        (0.1, 7.0),     # L_mu_E
+        (0.0, 2.5),     # sigma_E
+        (1, 25),        # theta_c_bns
+    ],
+    dtype=float,
+)
+DEFAULT_INITIAL_CENTER_SINGLE  = np.asarray([2, 1, 1, 1, 5])
+DEFAULT_INITIAL_SCALE_SINGLE   = np.asarray([0.30, 0.25, 0.15, 0.15, 0.08])
+
 def run_pop(
     alphas          : Sequence[str],
     fj_bns          : float,
@@ -73,14 +96,14 @@ def run_pop(
     datafiles       : Path = DATAFILES,
     population      : str = "delayed",
     nsbh_series     : str = "NSBH_DD2_uniform_chi_0_1",
-    n_params        : int = N_PARAMS,
+    n_params        : int = N_PARAMS_SINGLE,
     n_walkers       : int = 24,
     n_steps         : int = 10_000,
     n_events        : int = N_MC_EVENTS,
     sample_size     : int | None = None,
     seed            : int = 123,
-    initial_center  : Sequence[float] | None = None,
-    initial_scale   : Sequence[float] | None = None,
+    initial_center  : Sequence[float] | None = DEFAULT_INITIAL_CENTER_SINGLE,
+    initial_scale   : Sequence[float] | None = DEFAULT_INITIAL_SCALE_SINGLE,
 ) -> list[Path]:
     """Run the full joint likelihood for each alpha at fixed ``fj_bns``.
 
@@ -88,7 +111,7 @@ def run_pop(
     The starting ensemble for a new backend is drawn around
     ``initial_center`` and is constrained only by :func:`flat_prior`.
     """
-    if n_params != N_PARAMS: raise ValueError(f"This model samples exactly {N_PARAMS} parameters, not {n_params}")
+    if n_params != N_PARAMS_SINGLE: raise ValueError(f"This model samples exactly {N_PARAMS_SINGLE} parameters, not {n_params}")
     if not np.isfinite(fj_bns) or fj_bns <= 0: raise ValueError("fj_bns must be a positive finite value fixed for the entire run")
     if n_events <= 0 or n_steps < 0: raise ValueError("n_events must be positive and n_steps cannot be negative")
 
@@ -101,18 +124,18 @@ def run_pop(
             else max(sample_size, n_events)
         )
 
-        bns_data, nsbh_data, observations = initialize_combined_simulation(
+        bns_data, _, observations = initialize_combined_simulation(
             datafiles=Path(datafiles),
             population=population,
             alpha=alpha,
             nsbh_series=nsbh_series,
             sample_size=population_sample_size,
             seed=seed + alpha_index,
-        )
+        ) # first runs are BNS only then BNS + NSBH only 
 
         k_interpolator  = create_k_interpolator()
         bns_distances   = compute_luminosity_distance(bns_data.z_arr)
-        nsbh_distances  = nsbh_data.distances
+        #nsbh_distances  = nsbh_data.distances
         backend_label = f"{population}_{nsbh_series}"
 
         backend_path = _backend_path(
@@ -122,37 +145,20 @@ def run_pop(
             backend_label,
         )
 
-        def log_likelihood(thetas: Sequence[float]):
+        def log_likelihood_single(thetas: Sequence[float]):
             bns_likelihood_rng = np.random.default_rng(seed)
-            nsbh_likelihood_rng = np.random.default_rng(seed + 1)
-
-            (
-                a_index,
-                l_l0,
-                log10_kappa_nsbh,
-                l_mu_e,
-                sigma_e,
-                theta_c_bns,
-                theta_c_nsbh,
-            ) = thetas
+            a_index, l_l0, l_mu_e, sigma_e, theta_c_bns = thetas
             bns_grb_thetas      = [a_index, l_l0, l_mu_e, sigma_e]
-            nsbh_grb_thetas = [a_index, l_l0 + log10_kappa_nsbh, l_mu_e, sigma_e]
 
             geom_eff_bns    = geom_eff_func(theta_c_bns)
-            geom_eff_nsbh   = geom_eff_func(theta_c_nsbh)
             if (
                 not np.isfinite(geom_eff_bns)
-                or not np.isfinite(geom_eff_nsbh)
                 or geom_eff_bns < 0
-                or geom_eff_nsbh < 0
             ):
                 return _bad_likelihood()
 
             intrinsic_bns = (
                 geom_eff_bns * fj_bns * bns_data.total_merger_rate * GBM_EFF
-            )
-            intrinsic_nsbh = (
-                geom_eff_nsbh * FJ_NSBH_FIXED * nsbh_data.total_merger_rate * GBM_EFF
             )
 
             bns_results = simplified_montecarlo(
@@ -164,36 +170,15 @@ def run_pop(
                 rng = bns_likelihood_rng
             )
 
-            nsbh_results = simplified_montecarlo(
-                nsbh_grb_thetas,
-                n_events,
-                nsbh_data,
-                nsbh_distances,
-                k_interpolator,
-                rng=nsbh_likelihood_rng,
-            )
-
             bns_trig, bns_analysis = apply_detection_cuts(
                 bns_results["p_flux"],
                 bns_results["E_p_obs"],
             )
-            nsbh_trig, nsbh_analysis = apply_detection_cuts(
-                nsbh_results["p_flux"],
-                nsbh_results["E_p_obs"],
-            )
 
-            pflux_detected = np.concatenate(
-                (
-                    bns_results["p_flux"][bns_analysis],
-                    nsbh_results["p_flux"][nsbh_analysis],
-                )
-            )
-            epeak_detected = np.concatenate(
-                (
-                    bns_results["E_p_obs"][bns_analysis],
-                    nsbh_results["E_p_obs"][nsbh_analysis],
-                )
-            )
+            pflux_detected = bns_results["p_flux"][bns_analysis]
+
+            epeak_detected = bns_results["E_p_obs"][bns_analysis]
+ 
             if pflux_detected.size <= 3 or epeak_detected.size <= 3: return _bad_likelihood()
 
             logl_pflux = score_func_cvm(
@@ -211,16 +196,12 @@ def run_pop(
             observed_yearly_rate = observations["c_det"]
 
             phys_eff_bns = np.mean(bns_trig)
-            phys_eff_nsbh = np.mean(nsbh_trig)
             predicted_bns = (
                 intrinsic_bns * triggered_years * phys_eff_bns
             )
 
-            predicted_nsbh = (
-                intrinsic_nsbh * triggered_years * phys_eff_nsbh
-            )
-            predicted_total = predicted_bns + predicted_nsbh
-            observed_total = observed_yearly_rate * triggered_years
+            predicted_total = predicted_bns
+            observed_total  = observed_yearly_rate * triggered_years
 
             if not np.isfinite(predicted_total) or predicted_total <= 0: return _bad_likelihood()
 
@@ -234,15 +215,15 @@ def run_pop(
                 logl_epeak,
                 logl_poisson,
                 predicted_bns,
-                predicted_nsbh,
+                0, # no nsbh contribution
             )
 
         def log_probability(thetas: Sequence[float]):
-            log_prior = flat_prior(thetas)
+            log_prior = flat_prior(thetas, n_params=n_params, bounds=PRIOR_BOUNDS)
             if not np.isfinite(log_prior):
                 return (-np.inf, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-            likelihood = log_likelihood(thetas)
+            likelihood = log_likelihood_single(thetas)
             if not np.isfinite(likelihood[0]):
                 return (-np.inf, 0.0, 0.0, 0.0, 0.0, 0.0)
             return (log_prior + likelihood[0], *likelihood[1:])
@@ -276,7 +257,7 @@ def run_pop(
                 initial_walkers=initial_pos,
                 n_iterations=n_steps_remaining,
                 n_walkers=n_walkers,
-                n_params=N_PARAMS,
+                n_params=N_PARAMS_SINGLE,
                 backend=backend,
                 blobs_dtype=BLOBS_DTYPE,
             )
@@ -284,6 +265,9 @@ def run_pop(
 
     return output_paths
 
+def run_pop_combined(
+        
+)
 
 def _load_chain(
     alpha: str,
