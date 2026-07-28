@@ -1516,7 +1516,8 @@ def plot_posterior_grid(
     bins: int = 40,
     levels: Sequence[float] = (0.68, 0.95),
     log_axes: bool = True,
-    minimum_fraction: float = 5e-2,
+    minimum_fraction: float = 1e-2,
+    minimum_plot_fraction: float = 5e-2,
     population_labels: Sequence[str] | None = None,
 ):
     """Plot BNS/NSBH rate fractions in an alpha-by-jet-fraction grid."""
@@ -1542,6 +1543,7 @@ def plot_posterior_grid(
     )
     colors = ["k", "C1", "C2", "C3", "C4", "C5"]
     lower = minimum_fraction if log_axes else 0.0
+    lower = minimum_plot_fraction
 
     for row_index, row_value in enumerate(row_values):
         for column_index, column_value in enumerate(col_values):

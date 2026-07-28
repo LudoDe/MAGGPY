@@ -560,3 +560,349 @@ def plot_posterior_grid(
     axes[0, min(2, cols - 1)].legend(handles=handles, loc="upper right")
     fig.tight_layout()
     return fig, axes
+
+
+def _fraction_samples(
+    entry: Mapping[str, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return valid, complementary BNS and NSBH fraction samples."""
+    missing = {"R_BNS", "R_NSBH"}.difference(entry)
+    if missing:
+        raise KeyError(
+            "Rate-posterior entry is missing "
+            + ", ".join(sorted(missing))
+        )
+
+    rate_bns = np.asarray(entry["R_BNS"], dtype=float).reshape(-1)
+    rate_nsbh = np.asarray(entry["R_NSBH"], dtype=float).reshape(-1)
+    if rate_bns.shape != rate_nsbh.shape:
+        raise ValueError("R_BNS and R_NSBH must contain the same number of samples")
+
+    total_rate = rate_bns + rate_nsbh
+    valid = (
+        np.isfinite(rate_bns)
+        & np.isfinite(rate_nsbh)
+        & np.isfinite(total_rate)
+        & (rate_bns >= 0.0)
+        & (rate_nsbh >= 0.0)
+        & (total_rate > 0.0)
+    )
+    if not np.any(valid):
+        raise ValueError("No valid non-negative rate-posterior samples")
+
+    eta_bns = rate_bns[valid] / total_rate[valid]
+    eta_nsbh = 1.0 - eta_bns
+    return eta_bns, eta_nsbh
+
+import pandas as pd
+def summarize_fraction_posteriors(
+    dictionary_of_results: Mapping[
+        tuple[float, str, str], Mapping[str, np.ndarray]
+    ],
+    fj_list: Sequence[float],
+    alpha_list: Sequence[str],
+    nsbh_populations: Sequence[str],
+    population_labels: Sequence[str] | None = None,
+    credible_level: float = 0.90,
+) -> pd.DataFrame:
+    """Return medians and central credible intervals for both fractions.
+
+    The returned table has one row per alpha/fj/EOS combination.  ``minus``
+    and ``plus`` are the distances from the median to the lower and upper
+    bounds, respectively.
+    """
+    alpha_list = tuple(alpha_list)
+    fj_list = tuple(fj_list)
+    nsbh_populations = tuple(nsbh_populations)
+    #population_labels = _validate_population_labels(
+    #    nsbh_populations,
+    #    population_labels,
+    #)
+    if not alpha_list:
+        raise ValueError("At least one alpha is required")
+    if not fj_list:
+        raise ValueError("At least one fj value is required")
+    if not np.isfinite(credible_level) or not 0.0 < credible_level < 1.0:
+        raise ValueError("credible_level must lie strictly between 0 and 1")
+
+    tail_probability = 0.5 * (1.0 - credible_level)
+    quantiles = (tail_probability, 0.5, 1.0 - tail_probability)
+    records = []
+
+    for alpha in alpha_list:
+        alpha_label = (
+            str(alpha)[1:]
+            if str(alpha).startswith("A")
+            else str(alpha)
+        )
+        for fj_bns in fj_list:
+            for population, eos_label in zip(
+                nsbh_populations,
+                population_labels,
+            ):
+                key = (float(fj_bns), alpha, population)
+                try:
+                    entry = dictionary_of_results[key]
+                except KeyError as error:
+                    raise KeyError(f"Missing rate posterior for {key!r}") from error
+
+                eta_bns, eta_nsbh = _fraction_samples(entry)
+                record = {
+                    "alpha": alpha_label,
+                    "fj_bns": float(fj_bns),
+                    "EOS": eos_label,
+                }
+
+                for component, samples in (
+                    ("eta_nsbh", eta_nsbh),
+                    ("eta_bns", eta_bns),
+                ):
+                    lower, median, upper = np.quantile(
+                        samples,
+                        quantiles,
+                    )
+                    record[f"{component}_median"] = median
+                    record[f"{component}_minus"] = median - lower
+                    record[f"{component}_plus"] = upper - median
+                    record[f"{component}_lower"] = lower
+                    record[f"{component}_upper"] = upper
+
+                records.append(record)
+
+    summary = pd.DataFrame.from_records(records)
+    summary.attrs["credible_level"] = credible_level
+    return summary
+
+
+def format_fraction_summary_table(
+    summary: pd.DataFrame,
+    decimals: int = 3,
+) -> pd.DataFrame:
+    """Format a numeric fraction summary as a compact notebook table."""
+    if not isinstance(decimals, (int, np.integer)) or decimals < 0:
+        raise ValueError("decimals must be a non-negative integer")
+
+    required_columns = {
+        "alpha",
+        "fj_bns",
+        "EOS",
+        "eta_nsbh_median",
+        "eta_nsbh_minus",
+        "eta_nsbh_plus",
+        "eta_bns_median",
+        "eta_bns_minus",
+        "eta_bns_plus",
+    }
+    missing = required_columns.difference(summary.columns)
+    if missing:
+        raise ValueError(
+            "Summary table is missing columns: "
+            + ", ".join(sorted(missing))
+        )
+
+    def format_interval(
+        median: float,
+        minus: float,
+        plus: float,
+    ) -> str:
+        return (
+            f"{median:.{decimals}f} "
+            f"(+{plus:.{decimals}f}/-{minus:.{decimals}f})"
+        )
+
+    credible_level = summary.attrs.get("credible_level")
+    if credible_level is None:
+        interval_label = "central CI"
+    else:
+        interval_label = f"{100.0 * float(credible_level):g}% CI"
+
+    formatted = summary.loc[:, ["alpha", "fj_bns", "EOS"]].copy()
+    formatted[f"eta_NSBH (median, {interval_label})"] = [
+        format_interval(median, minus, plus)
+        for median, minus, plus in zip(
+            summary["eta_nsbh_median"],
+            summary["eta_nsbh_minus"],
+            summary["eta_nsbh_plus"],
+        )
+    ]
+    formatted[f"eta_BNS (median, {interval_label})"] = [
+        format_interval(median, minus, plus)
+        for median, minus, plus in zip(
+            summary["eta_bns_median"],
+            summary["eta_bns_minus"],
+            summary["eta_bns_plus"],
+        )
+    ]
+    return formatted
+
+from scipy.ndimage import gaussian_filter1d
+
+def plot_fraction_1d(
+    dictionary_of_results,
+    fj_list,
+    alpha_list,
+    nsbh_populations,
+    population_labels=None,
+    bins=50,
+    smooth_sigma=1.0,
+    swap_axes=False,
+):
+    """
+    Plot 1D posterior densities of eta_BNS and eta_NSBH.
+
+    Colors:
+        blue   = BNS
+        orange = NSBH
+
+    Line styles:
+        solid  = first EOS
+        dashed = second EOS
+    """
+    if population_labels is None:
+        population_labels = list(nsbh_populations)
+
+    row_values = fj_list if swap_axes else alpha_list
+    col_values = alpha_list if swap_axes else fj_list
+
+    rows = len(row_values)
+    cols = len(col_values)
+
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        figsize=(4 * cols, 3.2 * rows),
+        squeeze=False,
+        sharex=True,
+        sharey=True,
+    )
+
+    component_colors = {
+        "BNS": "k",
+        "NSBH": "r",
+    }
+
+    eos_linestyles = ["-", "--", ":", "-."]
+    bin_edges = np.linspace(0.0, 1.0, bins + 1)
+    bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    for row_index, row_value in enumerate(row_values):
+        for col_index, col_value in enumerate(col_values):
+            alpha = col_value if swap_axes else row_value
+            fj_bns = row_value if swap_axes else col_value
+            ax = axes[row_index, col_index]
+
+            for eos_index, population in enumerate(nsbh_populations):
+                entry = dictionary_of_results[
+                    (float(fj_bns), alpha, population)
+                ]
+
+                rate_bns = np.asarray(entry["R_BNS"], dtype=float)
+                rate_nsbh = np.asarray(entry["R_NSBH"], dtype=float)
+
+                total_rate = rate_bns + rate_nsbh
+                valid = (
+                    np.isfinite(rate_bns)
+                    & np.isfinite(rate_nsbh)
+                    & np.isfinite(total_rate)
+                    & (total_rate > 0)
+                )
+
+                eta_bns = rate_bns[valid] / total_rate[valid]
+
+                # Explicitly use complementarity.
+                eta_nsbh = 1.0 - eta_bns
+
+                linestyle = eos_linestyles[
+                    eos_index % len(eos_linestyles)
+                ]
+
+                for component, samples in {
+                    "BNS": eta_bns,
+                    "NSBH": eta_nsbh,
+                }.items():
+                    density, _ = np.histogram(
+                        samples,
+                        bins=bin_edges,
+                        density=True,
+                    )
+
+                    if smooth_sigma:
+                        density = gaussian_filter1d(
+                            density,
+                            smooth_sigma,
+                        )
+
+                    ax.plot(
+                        bin_centres,
+                        density,
+                        color=component_colors[component],
+                        linestyle=linestyle,
+                        linewidth=2,
+                    )
+
+            alpha_label = (
+                str(alpha)[1:]
+                if str(alpha).startswith("A")
+                else str(alpha)
+            )
+
+            ax.text(
+                0.5,
+                0.9,
+                rf"$\alpha_{{\rm CE}}={alpha_label}$"
+                rf", $f_j^{{\rm BNS}}={float(fj_bns):g}$",
+                transform=ax.transAxes,
+                ha="center",
+                va="center",
+                fontsize=14,
+            )
+            ax.set_xlim(0.0, 1.0)
+            ax.set_ylim(bottom=8e-2)
+            ax.set_yscale("log")
+
+            if row_index == rows - 1:
+                ax.set_xlabel("Population fraction")
+
+            if col_index == 0:
+                ax.set_ylabel("Posterior density")
+
+    component_handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            color=component_colors["BNS"],
+            linewidth=2,
+            label=r"$\eta_{\rm BNS}$",
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            color=component_colors["NSBH"],
+            linewidth=2,
+            label=r"$\eta_{\rm NSBH}$",
+        ),
+    ]
+
+    eos_handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            color="0.25",
+            linestyle=eos_linestyles[index],
+            linewidth=2,
+            label=label,
+        )
+        for index, label in enumerate(population_labels)
+    ]
+
+    fig.legend(
+        handles=component_handles + eos_handles,
+        loc="upper center",
+        ncol=2 + len(eos_handles),
+        frameon=False,
+        bbox_to_anchor=(0.5, 0.97),
+        fontsize=16
+    )
+
+    fig.tight_layout(rect=(0, 0, 1, 0.91))
+    return fig, axes
