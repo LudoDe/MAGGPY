@@ -69,15 +69,25 @@ pip install -r requirements.txt
 If you use this code, please cite:
 
 ```bibtex
-@misc{desantis2026constrainingbinaryneutronstar,
-      title={Constraining Binary Neutron Star Populations using Short Gamma-Ray Burst Observations},
-      author={Alessio Ludovico De Santis and Samuele Ronchini and Filippo Santoliquido and Marica Branchesi},
-      year={2026},
-      eprint={2602.13391},
-      archivePrefix={arXiv},
-      primaryClass={astro-ph.HE},
-      url={https://arxiv.org/abs/2602.13391},
+@ARTICLE{2026A&A...710A.388D,
+       author = {{De Santis}, A.~L. and {Ronchini}, S. and {Santoliquido}, F. and {Branchesi}, M.},
+        title = "{Constraining binary neutron star population synthesis models using short gamma-ray burst data}",
+      journal = {\aap},
+     keywords = {astroparticle physics, gravitational waves, gamma-ray burst: general, High Energy Astrophysical Phenomena, Astrophysics of Galaxies},
+         year = 2026,
+        month = jul,
+       volume = {710},
+          eid = {A388},
+        pages = {A388},
+          doi = {10.1051/0004-6361/202659597},
+archivePrefix = {arXiv},
+       eprint = {2602.13391},
+ primaryClass = {astro-ph.HE},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026A&A...710A.388D},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
+
+
 ```
 
 ---
