@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use MAGGPY, please cite the article listed under preferred-citation."
+title: "MAGGPY"
+type: software
+
+authors:
+  - family-names: "De Santis"
+    given-names: "Alessio Ludovico"
+    orcid: "https://orcid.org/0009-0005-4288-3758"
+
+repository-code: "https://github.com/LudoDe/MAGGPY"
+license: BSD-3-Clause
+
+keywords:
+  - "gamma-ray bursts"
+  - "gravitational waves"
+  - "multimessenger astronomy"
+  - "population synthesis"
+  - "MCMC"
+
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "De Santis"
+      given-names: "Alessio Ludovico"
+      orcid: "https://orcid.org/0009-0005-4288-3758"
+    - family-names: "Ronchini"
+      given-names: "Samuele"
+    - family-names: "Santoliquido"
+      given-names: "Filippo"
+    - family-names: "Branchesi"
+      given-names: "Marica"
+  title: "Constraining binary neutron star population synthesis models using short gamma-ray burst data"
+  journal: "Astronomy & Astrophysics"
+  year: 2026
+  volume: 710
+  start: "A388"
+  doi: "10.1051/0004-6361/202659597"
+  url: "https://doi.org/10.1051/0004-6361/202659597"
+  identifiers:
+    - type: other
+      value: "arXiv:2602.13391"
