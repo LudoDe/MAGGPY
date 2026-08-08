@@ -1,49 +1,55 @@
-.ruff_cache
-test.ipynb
-*.log
-*.h5
-MC_old.ipynb
-graveyard.py
-_*.ipynb
-logfile.txt
-Testing*
-testing*
-*npz
-*int.txt
-gwpop/
-*.excalidraw
+# Python
+__pycache__/
+*.py[cod]
 
-# but include psds txt files
-!Tutorials_ACME/psds/*.txt
-
-# venv
+# Virtual environments
+.venv/
 venv/
 env/
 .env/
-.venv/
+.env
+.env.*
+!.env.example
 
-#vscode
-.vscode/   
-.vscode/*
+# Package builds
+build/
+dist/
+*.egg-info/
+.eggs/
 
-src/neutrino.py
-Tutorials_ACME/tutorial2.2_structured_jet.ipynb
+# Tests and code quality
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+
+# MAGGPY outputs
+Output_files/
+gwpop/
+job_configs/
+Testing*/
+testing*/
 *MonteCarlo_Ind*
 
-Notebooks_for_historical_reference/
-Notebooks_for_historical_reference/*
-tutorial_images/populations
-tutorial_images/populations/*
+# Generated simulation files
+*.log
+*.h5
+*.npz
+logfile.txt
+*simulated_catalogue.csv
+test_output/
+*fermi_catalogue*
 
-Output_files
-Output_files/
-Output_files/*
 
-__pycache__
-__pycache__/*
-**.ipynb_checkpoints
+# Local working files
+test.ipynb
 
-job_configs
-
-|Tutorials_ACME/simulated_catalogue.csv
-|requirements.txt
+# Keep tutorial PSD files
+!Tutorials/psds/*.txt
