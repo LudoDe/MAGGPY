@@ -52,18 +52,6 @@ pip install -r requirements.txt
 
 ---
 
-## Tutorials (ACME)
-
-| # | Notebook | Description |
-|---|---|---|
-| 0 | `tutorial0_data_preparation` | Load & filter the Fermi/GBM catalogue; prepare MRD redshift samples |
-| 1 | `tutorial1_tophat` | Top-hat jet model: prior setup, short MCMC, CDF visualisation, $f_j$ posterior |
-| 2 | `tutorial2_structured_jet` | Structured jet (7 params): MCMC, convergence diagnostics, posterior predictive checks |
-| 3 | `tutorial3_gwfish_joint_detections` | GW detection efficiency with GWFish (ET + CE networks) |
-| 4 | `tutorial4_gwfish_skyloc` | Sky localisation & Fisher-matrix parameter estimation |
-
----
-
 ## Citation
 
 If you use this code, please cite:
@@ -89,16 +77,3 @@ archivePrefix = {arXiv},
 
 
 ```
-
----
-
-## License
-
-This work is licensed under a [Creative Commons Attribution 4.0 International
-License][cc-by].
-
-[![CC BY 4.0][cc-by-image]][cc-by]
-
-[cc-by]: http://creativecommons.org/licenses/by/4.0/
-[cc-by-image]: https://i.creativecommons.org/l/by/4.0/88x31.png
-[cc-by-shield]: https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg
