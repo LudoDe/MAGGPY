@@ -2,7 +2,8 @@ cff-version: 1.2.0
 message: "If you use MAGGPY, please cite the article listed under preferred-citation."
 title: "MAGGPY"
 type: software
-
+version: "0.1.0"
+date-released: "2026-08-08"
 authors:
   - family-names: "De Santis"
     given-names: "Alessio Ludovico"
