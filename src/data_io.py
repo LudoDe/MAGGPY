@@ -2,7 +2,7 @@ import  numpy       as np
 import  pandas      as pd
 from    scipy       import interpolate
 from    typing      import Tuple, Callable, Dict
-from    .montecarlo  import DEFAULT_LIMITS
+from    .utils      import DEFAULT_LIMITS
 
 def get_Rf_Re(filename: str) -> Tuple[Callable, Callable, np.ndarray]:
     """
@@ -56,51 +56,6 @@ def get_alpha_n_alpha_e(file_n: str, file_e: str) -> Tuple[Callable, Callable, n
     alpha_e         = interpolate.interp1d(theta_v_arr_e, alpha_e_values, fill_value="extrapolate") 
 
     return alpha_n, alpha_e, theta_v_arr_n, theta_v_arr_e
-
-def get_observables_data(filename: str) -> Dict[str, np.ndarray]:
-    """
-    Load constraints data from the specified file and return a dictionary containing observables.
-
-    Parameters:
-        filename (str): Path to the constraints file.
-
-    Returns:
-        Dictionary with keys:
-          'epeak', 'epeak_err', 'duration', 'duration_err',
-          'pflux', 'pflux_err', 'fluence', 'fluence_err'.
-    """
-    file_constraints = np.loadtxt(filename).T
-    pflux_data, duration_data, fluence_data, epeak_data = file_constraints 
-
-    print(f"Loaded {len(epeak_data)} events from {filename}.")
-    # the bounds for the data
-    print(f"pflux: {np.min(pflux_data):.2e} - {np.max(pflux_data):.2e}")
-    print(f"duration: {np.min(duration_data):.2e} - {np.max(duration_data):.2e}")
-    print(f"fluence: {np.min(fluence_data):.2e} - {np.max(fluence_data):.2e}")
-    print(f"epeak: {np.min(epeak_data):.2e} - {np.max(epeak_data):.2e}")
-
-
-    return {
-        "epeak"         : epeak_data,
-        "duration"      : duration_data,
-        "pflux"         : pflux_data,
-        "fluence"       : fluence_data,
-    }
-
-def get_redshift_distribution(filename: str) -> np.ndarray:
-    """
-    Load redshift distribution from a file.
-
-    Parameters:
-        filename (str): Path to the redshift data file.
-
-    Returns:
-        Array of redshift values.
-    """
-    parameters  = ['mass_1', 'mass_2', 'redshift', 'cmu1', 'cmu2', 'dl']
-    err_ET      = pd.read_csv(filename, names = parameters, delimiter=' ')
-    z_arr       = err_ET['redshift'].to_numpy()
-    return z_arr
 
 def catalogue_prep(datafiles, limits = DEFAULT_LIMITS):
     

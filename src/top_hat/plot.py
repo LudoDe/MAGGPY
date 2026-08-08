@@ -75,13 +75,13 @@ class TopHatPlotter:
         return {name: blobs[name] for name in blobs.dtype.names}
     
     def _calculate_rate(self, theta, n_detected: int, n_events: int, 
-                        params_in, geometric_eff_func=None) -> float:
+                        TOTAL_BNS_RATE: float, geometric_eff_func=None) -> float:
         """Calculate predicted rate based on model type."""
         gbm_eff = 0.6
         
         if self.model_type == "EPSILON":
             epsilon = theta[-1]
-            grbs_per_year = epsilon * len(params_in.z_arr) * gbm_eff
+            grbs_per_year = epsilon * TOTAL_BNS_RATE * gbm_eff
             years_sim = n_events / grbs_per_year
             return n_detected / years_sim
         else:
@@ -104,8 +104,8 @@ class TopHatPlotter:
             
             physics_eff = n_detected / n_events
             total_eff = geometric_eff * physics_eff
-            intrinsic_rate = fj * len(params_in.z_arr)
-            return intrinsic_rate * total_eff * gbm_eff
+            intrinsic_rate = fj     * TOTAL_BNS_RATE
+            return intrinsic_rate   * total_eff * gbm_eff
     
     def plot_corner(self, filename: str = "corner_plot.pdf", **kwargs) -> plt.Figure:
         """Create corner plot of posterior distributions."""
@@ -181,7 +181,7 @@ class TopHatPlotter:
             plt.close(fig)
         return fig
     
-    def plot_cdf_comparison(self, mc_func, params_in, distances, k_interpolator,
+    def plot_cdf_comparison(self, mc_func, bns_data, observables,
                             n_samples: int = 200, n_events: int = 10000,
                             geometric_eff_func=None,
                             filename: str = "cdf_comparison.pdf", **kargs) -> plt.Figure:
@@ -191,7 +191,7 @@ class TopHatPlotter:
         p_flx_all, e_pk_all, rates = [], [], []
         
         for theta in samples:
-            results = mc_func(theta, n_events, params_in, distances, k_interpolator)
+            results = mc_func(theta, n_events, bns_data)
             
             trigger_mask = results["p_flux"] > 4
             analysis_mask = trigger_mask & (results["E_p_obs"] > 50) & (results["E_p_obs"] < 10000)
@@ -201,7 +201,8 @@ class TopHatPlotter:
             
             # Calculate rate based on model type
             n_triggered = np.sum(trigger_mask)
-            rate = self._calculate_rate(theta, n_triggered, n_events, params_in, geometric_eff_func)
+            TOTAL_BNS_RATE = bns_data.total_merger_rate
+            rate = self._calculate_rate(theta, n_triggered, n_events, TOTAL_BNS_RATE, geometric_eff_func)
             rates.append(rate)
         
         # Compute CDFs
@@ -211,8 +212,8 @@ class TopHatPlotter:
         
         p_flx_sim, cdf_pflux_sim = ecdf(np.concatenate(p_flx_all))
         e_pk_sim, cdf_epeak_sim = ecdf(np.concatenate(e_pk_all))
-        p_flx_obs, cdf_pflux_obs = ecdf(params_in.pflux_data)
-        e_pk_obs, cdf_epeak_obs = ecdf(params_in.epeak_data)
+        p_flx_obs, cdf_pflux_obs = ecdf(observables['pflux'])
+        e_pk_obs, cdf_epeak_obs = ecdf(observables['epeak'])
         
         # Plot
         fig, axs = plt.subplots(1, 3, figsize=(14, 4))
@@ -221,19 +222,19 @@ class TopHatPlotter:
         axs[0].plot(p_flx_sim, cdf_pflux_sim, color=self.COLORS['sim'], lw=2, label='Simulated')
         axs[0].plot(p_flx_obs, cdf_pflux_obs, color=self.COLORS['obs'], lw=2, label='Observed')
         axs[0].set(xlabel=r'Peak Flux (ph/cm$^2$/s)', ylabel='CDF', xscale='log', 
-                   xlim=(4, params_in.pflux_data.max()), ylim=(0, 1.01))
+                   xlim=(4, observables['pflux'].max()), ylim=(0, 1.01))
         axs[0].legend(fontsize=11)
         
         # Peak Energy
         axs[1].plot(e_pk_sim, cdf_epeak_sim, color=self.COLORS['sim'], lw=2)
         axs[1].plot(e_pk_obs, cdf_epeak_obs, color=self.COLORS['obs'], lw=2)
         axs[1].set(xlabel=r'Peak Energy (keV)', xscale='log',
-                   xlim=(50, params_in.epeak_data.max()), ylim=(0, 1.01))
+                   xlim=(50, observables['epeak'].max()), ylim=(0, 1.01))
         
         # Rate Distribution
         axs[2].hist(rates, bins=15, alpha=0.7, color=self.COLORS['sim'], density=True)
-        axs[2].axvline(params_in.yearly_rate, color=self.COLORS['obs'], ls='--', lw=2,
-                       label=f'Expected: {params_in.yearly_rate:.1f}/yr')
+        axs[2].axvline(observables['c_det'], color=self.COLORS['obs'], ls='--', lw=2,
+                       label=f'Expected: {observables["c_det"]:.1f}/yr')
         axs[2].set(xlabel='Rate (GRBs/year)', ylabel='Density')
         axs[2].text(0.05, 0.95, f'$\\mu$={np.mean(rates):.1f}\n$\\sigma$={np.std(rates):.1f}',
                     transform=axs[2].transAxes, va='top', fontsize=10,

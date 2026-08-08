@@ -25,7 +25,9 @@ env/
 #vscode
 .vscode/   
 .vscode/*
-
+/test_output
+*simulated_catalogue*
+fermi_catalogue*
 
 *MonteCarlo_Ind*
 

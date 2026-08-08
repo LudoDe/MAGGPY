@@ -11,8 +11,6 @@ DEFAULT_SPECTRAL_PARAMS = {
     "alpha"         : -0.67,    # 2/3 from synchrotron
     "beta_s"        : -2.59,    # Average value from GRBs
     "n"             : 2,        # Smoothly broken power law curvature
-    "theta_c"       : 3.4,      # Ghirlanda half-angle of jet core (from GW170817)
-    "theta_v_max"   : 10,       # Maximum viewing angle of the jet (in degrees)
 }
 
 def broken_power_law(
