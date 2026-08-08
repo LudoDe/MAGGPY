@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, '../../')
-from src.top_hat.geometric_eff import (
+from maggpy.top_hat.geometric_eff import (
     geometric_efficiency_fixed,
     create_geometric_efficiency_lognormal_interpolator,
     geometric_efficiency_flat_midpoint

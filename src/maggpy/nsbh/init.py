@@ -144,7 +144,7 @@ def load_population(
     )
 
 def initialize_combined_simulation(
-    datafiles       : Path = Path("datafiles"),
+    datafiles       : Path,
     population      : str = "delayed",
     alpha           : str = "A1.0",
     nsbh_series     : str = "NSBH_DD2_uniform_chi_0_1",
@@ -153,7 +153,6 @@ def initialize_combined_simulation(
 ) -> tuple[PopulationData, PopulationData, Dict[str, np.ndarray]]:
     """Initialize matching BNS and NSBH top-hat populations."""
 
-    datafiles       = Path(datafiles)
     mrd_directory   = datafiles / "MRD_outputs"
 
     # Independent, reproducible random streams.

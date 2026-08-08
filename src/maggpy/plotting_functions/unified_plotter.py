@@ -39,7 +39,6 @@ plt.rcParams.update({
 
 # Directory Configuration
 DATA_FILES_DIR = "datafiles" # Location of evs_yr.json, etc.
-
 DIRS = {
     "Structured": Path("Output_files/ProductionPop_fj10_20k_init_same"),
     "Fixed":      Path("Output_files/ProductionPop_Theta_c_10k"),

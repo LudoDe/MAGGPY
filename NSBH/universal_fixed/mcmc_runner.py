@@ -9,8 +9,8 @@ from matplotlib.patches import Rectangle
 import sys
 # Assume sys.path has been configured in the notebook to find `src`
 import src.init
-from src.nsbh.init import initialize_combined_simulation
-from src.top_hat.montecarlo import (
+from maggpy.nsbh.init import initialize_combined_simulation
+from maggpy.top_hat.montecarlo import (
     create_k_interpolator,
     compute_luminosity_distance,
     simplified_montecarlo,
@@ -20,7 +20,7 @@ from src.top_hat.montecarlo import (
     run_mcmc,
     check_and_resume_mcmc,
 )
-from src.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
+from maggpy.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
 
 def run_populations(alphas, fj_bns_values, geom_eff_func, datafiles, 
                     n_params_1=5, n_walkers_1=24, n_steps_1=5000,

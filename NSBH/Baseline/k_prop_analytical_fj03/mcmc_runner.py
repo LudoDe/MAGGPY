@@ -9,9 +9,9 @@ from astropy.cosmology import Planck18, FlatLambdaCDM
 import src.init
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.interpolate import interp1d
-from src.nsbh.init import initialize_combined_simulation
-from src.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
-from src.top_hat.montecarlo import (
+from maggpy.nsbh.init import initialize_combined_simulation
+from maggpy.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
+from maggpy.top_hat.montecarlo import (
     apply_detection_cuts,
     check_and_resume_mcmc,
     compute_luminosity_distance,
@@ -772,9 +772,9 @@ import numpy as np
 from scipy.stats import cramervonmises_2samp, poisson
 
 import src.init
-from src.nsbh.init import initialize_combined_simulation
-from src.top_hat.montecarlo import create_k_interpolator
-from src.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
+from maggpy.nsbh.init import initialize_combined_simulation
+from maggpy.top_hat.montecarlo import create_k_interpolator
+from maggpy.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
 
 # Ensure forward_model_fast, prepare_interpolators, and FJ_BNS 
 # remain accessible in your module scope.

@@ -80,8 +80,8 @@ def create_integral_interpolators(
     return (*interp_funcs, E_p_arr)
 
 def initialize_simulation(
-        datafiles   : Path              = Path("datafiles"), 
-        mrd_path    : Path              = Path("datafiles/MRD_outputs/fiducial_A1_0_BNS.csv"),
+        datafiles   : Path, 
+        mrd_path    : Path,
         params      : Dict[str, Any]    = DEFAULT_PARAMS,
         size_test   : int = 2_000
     ) -> Tuple[SimParams, Interps, Dict[str, np.ndarray]]:

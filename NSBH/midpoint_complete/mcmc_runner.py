@@ -7,9 +7,9 @@ from scipy.stats import gaussian_kde
 import corner
 
 import src.init
-from src.nsbh.init import initialize_combined_simulation
-from src.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
-from src.top_hat.montecarlo import (
+from maggpy.nsbh.init import initialize_combined_simulation
+from maggpy.nsbh.montecarlo import GBM_EFF, FJ_NSBH_FIXED, N_MC_EVENTS
+from maggpy.top_hat.montecarlo import (
     apply_detection_cuts,
     check_and_resume_mcmc,
     compute_luminosity_distance,
