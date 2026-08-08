@@ -14,7 +14,8 @@ from scipy.interpolate  import interp1d
 from astropy            import units as u
 from typing             import Mapping, Callable
 from astropy.cosmology  import Planck18
-from .montecarlo        import compute_luminosity_distance, create_k_interpolator
+from .montecarlo        import create_k_interpolator
+from ..utils            import compute_luminosity_distance
 from ..redshift         import sample_from_mrd
 from ..data_io          import catalogue_prep
 
