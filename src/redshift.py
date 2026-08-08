@@ -55,7 +55,7 @@ def sample_from_mrd(
     z_grid: np.ndarray,
     P_z_density : np.ndarray,
     n_samples   : int,
-    rng         : np.random.Generator = None
+    rng         : np.random.Generator = np.random.default_rng(42)
 ) -> np.ndarray:
     """
     Sample redshifts from the MRD probability distribution using inverse CDF.
@@ -69,7 +69,6 @@ def sample_from_mrd(
     Returns:
         z_samples: Array of sampled redshifts
     """
-    if rng is None: rng = np.random.default_rng(42)
     
     # Build CDF
     cdf         = np.cumsum(P_z_density)
