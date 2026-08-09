@@ -5,6 +5,7 @@ This module contains all the functions needed to initialize the Monte Carlo simu
 """
 
 import numpy                as np
+import pandas               as pd
 from pathlib                import Path
 from scipy                  import integrate
 from typing                 import Any, Callable, Dict, Tuple
@@ -79,6 +80,24 @@ def create_integral_interpolators(
     
     return (*interp_funcs, E_p_arr)
 
+def load_custom_structure_constants(param_to_mod, structure_source):
+    #load the csv theta_v,R_E,R_F,alpha_E,alpha_N
+    df_struct   = pd.read_csv(structure_source)
+    theta_v     = df_struct['theta_v'].values
+    R_E         = df_struct['R_E'].values
+    R_F         = df_struct['R_F'].values
+    alpha_E     = df_struct['alpha_E'].values
+    alpha_N     = df_struct['alpha_N'].values
+
+    # for each create interps and overwrite the parameter objets
+    theta_v_params          = param_to_mod.theta_v
+    param_to_mod.R_E        = np.interp(theta_v_params, theta_v, R_E)
+    param_to_mod.R_F        = np.interp(theta_v_params, theta_v, R_F)
+    param_to_mod.alpha_E    = np.interp(theta_v_params, theta_v, alpha_E)
+    param_to_mod.alpha_N    = np.interp(theta_v_params, theta_v, alpha_N)
+
+    return param_to_mod
+
 def initialize_simulation(
         datafiles   : Path, 
         mrd_path    : Path,
@@ -103,7 +122,7 @@ def initialize_simulation(
     """
     rng         = np.random.default_rng(SEED)
 
-    params_in   = DEFAULT_SPECTRAL_PARAMS.copy() # any user-specified params will override defaults
+    params_in   = DEFAULT_PARAMS.copy() # any user-specified params will override defaults
     params_in.update(params) 
 
     deg_to_rad          = np.pi / 180
@@ -129,14 +148,14 @@ def initialize_simulation(
         theta_c         = params_in["theta_c"] * deg_to_rad, 
         theta_v_max     = params_in["theta_v_max"] * deg_to_rad, 
         z_arr           = z_arr, # sampled redshift values 
-        theta_v         = theta_v,
         epeak_data      = data_dict["epeak"],
         duration_data   = data_dict["t90"],
         pflux_data      = data_dict["pflux"],
         fluence_data    = data_dict["fluence"],
         yearly_rate     = data_dict["c_det"],
         triggered_years = data_dict["trigger_years"],
-        rng             = rng,
+
+        theta_v         = theta_v,
         alpha_n         = alpha_n(theta_v),
         alpha_e         = alpha_e(theta_v),
         R_F             = R_F(theta_v),
@@ -146,7 +165,9 @@ def initialize_simulation(
         z_grid              = z_grid,
         P_z_density         = P_z_density,
         total_merger_rate   = total_rate,
-        local_rate          = local_rate
+        local_rate          = local_rate,
+
+        rng                 = rng,
     )
 
     default_interpolator = Interps(

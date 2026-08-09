@@ -524,8 +524,7 @@ def generate_grb_population(
         Returns None if too few events pass detection cuts.
     """
     # Set random seed if provided
-    if seed is not None:
-        params.rng = np.random.default_rng(seed)
+    if seed is not None: params.rng = np.random.default_rng(seed)
     
     # Generate observations using existing machinery
     obs = make_observations(
@@ -550,3 +549,177 @@ def generate_grb_population(
         'n_detected'            : obs['triggered_events'],
         'isotropic_energy_det'  : obs['isotropic_energy_det'],
     }
+
+#######################################
+# For generating neutrino grb data    #
+#######################################
+
+def generate_macro_properties_catalogue(
+        thetas: list,
+        params: SimParams,
+        interps: Interps,
+        n_counts_new: int
+    ) -> dict:
+    """
+    Generate macro properties for catalogue GRB samples.
+
+    Unlike generate_macro_properties(), this also returns the intrinsic
+    rest-frame peak energy and the structure-adjusted isotropic energy.
+    """
+    (
+        k_pl,
+        L_L0,
+        L_mu_E_10,
+        sigma_E_10,
+        L_mu_tau_10,
+        sigma_tau_10,
+        _,  # fj is unused here
+    ) = thetas
+
+    rng = params.rng
+
+    # Sample redshifts and corresponding geometric factors.
+    idx = rng.integers(
+        low=0,
+        high=len(params.z_corr),
+        size=n_counts_new,
+    )
+    geometry = params.geometric_factors[idx]
+    one_plus_z = params.z_corr[idx]
+
+    # Generate intrinsic duration and peak-energy distributions.
+    ln_10 = np.log(10)
+
+    t_peak = rng.lognormal(
+        mean=L_mu_tau_10 * ln_10,
+        sigma=sigma_tau_10 * ln_10,
+        size=n_counts_new,
+    )
+    E_p_hat = rng.lognormal(
+        mean=L_mu_E_10 * ln_10,
+        sigma=sigma_E_10 * ln_10,
+        size=n_counts_new,
+    )
+
+    # Sample viewing-angle-dependent structure factors.
+    idtheta = rng.integers(
+        low=0,
+        high=len(params.theta_v),
+        size=n_counts_new,
+    )
+    R_E_theta = params.R_E[idtheta]
+    R_F_theta = params.R_F[idtheta]
+
+    L_arr = luminosity_gen(
+        k_pl,
+        n_counts_new,
+        rng=rng,
+    )
+
+    E_p_obs = R_E_theta * E_p_hat / one_plus_z
+
+    I1 = (
+        1.15739
+        * t_peak
+        * interps.int_0_alt(E_p_hat)
+    )
+
+    N0 = (
+        1e49
+        * 10**L_L0
+        * L_arr
+        * geometry
+        / I1
+    )
+
+    F_0 = N0 * one_plus_z**2 * R_F_theta
+
+    # Peak flux in the BATSE 50–300 keV band.
+    F_P_real = (
+        F_0
+        * interps.int_3_alt(E_p_obs)
+        * 6.2e8
+    )
+
+    isotropic_energy = (
+        1e49
+        * 10**L_L0
+        * L_arr
+        / (1 - np.cos(params.theta_c))
+    )
+
+    return {
+        "t_peak_c_z": t_peak * one_plus_z,
+        "F_p_real": F_P_real,
+        "F_0": F_0,
+        "E_p_obs": E_p_obs,
+        "R_F_theta": R_F_theta,
+        "alpha_e": params.alpha_e[idtheta],
+        "alpha_n": params.alpha_n[idtheta],
+        "z": one_plus_z - 1,
+        "theta_v": params.theta_v[idtheta],
+        "isotropic_energy": isotropic_energy,
+        "isotropic_energy_w_structure": (
+            isotropic_energy * R_F_theta
+        ),
+        "E_p_hat": E_p_hat,
+    }
+
+def generate_catalogue(
+        thetas,
+        params: SimParams,
+        interps: Interps,
+        n_years: float = 10
+    ):
+
+    # Calculate number of events to simulate
+    fj                   = thetas[-1]
+    GBM_eff              = 0.6
+    geometric_efficiency = 1 - np.cos(params.theta_v_max)
+    total_bns_all_sky    = n_years * len(params.z_arr)
+    available_events     = (
+        total_bns_all_sky
+        * geometric_efficiency
+        * GBM_eff
+        * fj
+    )
+    n_events = int(available_events)
+
+    print(f"Simulating {n_events} events for {n_years} years...")
+
+    # Generate properties
+    m_prop = generate_macro_properties_catalogue(
+        thetas, params, interps, n_events
+    )
+
+    # Compute observables for ALL events (no cuts)
+    P_F_64ms_50_300 = compute_Fp_64_ms_optimized(m_prop, interps)
+    t_90_array, f_det_in = compute_time_evolution(m_prop, interps)
+
+    temp_obs = {
+        "z_det":  m_prop["z"],
+        "f_det":  f_det_in,
+        "t_det":  t_90_array,
+        "Ep_det": m_prop["E_p_obs"],
+    }
+    E_iso_det, L_iso_det = calculate_isotropic_luminosity(
+        temp_obs
+    )
+
+    catalogue = {
+        "Ep_detected":     m_prop["E_p_obs"],
+        "Ep_rest":         m_prop["E_p_hat"],
+        "pflux":           m_prop["F_p_real"],
+        "pflux64ms":       P_F_64ms_50_300,
+        "fluence":         f_det_in,
+        "E_iso":           m_prop["isotropic_energy"],
+        "E_iso_structure": m_prop["isotropic_energy_w_structure"],
+        "E_iso_recovered": E_iso_det,
+        "L_iso_recovered": L_iso_det,
+        "z":               m_prop["z"],
+        "theta":           m_prop["theta_v"],
+        "t90":             t_90_array,
+        "t_peak":          m_prop["t_peak_c_z"],
+    }
+
+    return catalogue
