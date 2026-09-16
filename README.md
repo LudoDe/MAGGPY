@@ -8,7 +8,7 @@
   <b>Multimessenger Astronomy for GRBs and Gravitational Waves in Python</b>
 </p>
 
-## About :watermelon: :watermelon: :watermelon:
+## 🍉 About 
 
 MAGGPY is a Python package I developed for simulating populations of short gamma-ray bursts and comparing them with observations from the Fermi/GBM catalogue.
 
@@ -16,7 +16,7 @@ The package uses forward Monte Carlo simulations and MCMC inference to investiga
 
 MAGGPY was originally developed for the analysis presented in [De Santis et al. (2026)](https://doi.org/10.1051/0004-6361/202659597).
 
-## What MAGGPY does
+## 🍉 What MAGGPY does
 
 * Simulates short GRB populations and their observable properties
 * Fits simulated populations to Fermi/GBM catalogue data
@@ -28,7 +28,7 @@ MAGGPY was originally developed for the analysis presented in [De Santis et al. 
 
 MAGGPY is research software and is still under active development.
 
-## Installation
+## 🍉 Installation
 
 MAGGPY currently supports Python 3.10 and 3.11. I recommend installing it in a clean environment.
 
@@ -54,7 +54,7 @@ On Windows, activate the environment with:
 .venv\Scripts\activate
 ```
 
-### Optional dependencies
+### 🍉 Optional dependencies
 
 Plotting support:
 
@@ -80,7 +80,7 @@ To install everything used by the tutorial notebooks:
 python -m pip install "maggpy[plot,gw,fermi,notebooks]"
 ```
 
-## Getting started
+## 🍉 Getting started
 
 Check that MAGGPY is installed correctly:
 
@@ -100,7 +100,7 @@ The example notebooks in [`Tutorials`](Tutorials) cover:
 
 The tutorials are intended to be read in order, but they can also be used as examples for setting up an independent analysis.
 
-## Installing for development
+## 🍉 Installing for development
 
 To work on the source code:
 
@@ -116,7 +116,7 @@ Run the tests with:
 pytest
 ```
 
-## Citation
+## 🍉 Citation
 
 If you use MAGGPY in your work, please cite:
 
@@ -127,10 +127,10 @@ If you use MAGGPY in your work, please cite:
 
 Full citation metadata is available in [`CITATION.cff`](CITATION.cff). GitHub also provides a **Cite this repository** button on the repository page.
 
-## Questions and problems
+## 🍉 Questions and problems
 
 If you find a bug, have trouble reproducing a result, or have a question about the package, please [open an issue](https://github.com/LudoDe/MAGGPY/issues).
 
-## License
+## 🍉 License
 
 MAGGPY is distributed under the [BSD 3-Clause License](LICENSE).
