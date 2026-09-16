@@ -5,6 +5,10 @@
 <h1 align="center">MAGGPY</h1>
 
 <p align="center">
+  <img src="datafiles/logo2.png" alt="logo2" width="200">
+</p>
+
+<p align="center">
   <b>Multimessenger Astronomy for GRBs and Gravitational Waves in Python</b>
 </p>
 
