@@ -5,14 +5,10 @@
 <h1 align="center">MAGGPY</h1>
 
 <p align="center">
-  <img src="datafiles/logo2.png" alt="logo2" width="200">
-</p>
-
-<p align="center">
   <b>Multimessenger Astronomy for GRBs and Gravitational Waves in Python</b>
 </p>
 
-## About
+## About :watermelon: :watermelon: :watermelon:
 
 MAGGPY is a Python package I developed for simulating populations of short gamma-ray bursts and comparing them with observations from the Fermi/GBM catalogue.
 
