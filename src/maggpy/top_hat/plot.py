@@ -45,6 +45,12 @@ class TopHatLabels:
         "ranges": [(1.5, 6), (-2, 7), (0.1, 7), (0, 2.5), (0, 25), (0, 10)],
         "log_last": False,
     }
+    THETA_C_FLAT_UNIQUE = {
+        "params": [r"$k$", r"$\log_{10}(L_0)$", r"$\log_{10}(\mu_E)$", 
+                   r"$\sigma_E$", r"$f_j$"],
+        "ranges": [(1.5, 6), (-2, 7), (0.1, 7), (0, 2.5), (0, 10)],
+        "log_last": False,
+    }        
 
 class TopHatPlotter:
     """Visualization tools for Top Hat model MCMC results."""
@@ -84,6 +90,10 @@ class TopHatPlotter:
             grbs_per_year = epsilon * TOTAL_BNS_RATE * gbm_eff
             years_sim = n_events / grbs_per_year
             return n_detected / years_sim
+        elif self.model_type == "THETA_C_FLAT_UNIQUE":
+            theta_c_param = 25
+            fj = theta[-1]
+            geometric_eff = 1 - np.cos(np.deg2rad(theta_c_param))
         else:
             # FLAT_THETA, LOGNORMAL_THETA, or THETA_C
             theta_c_param, fj = theta[4], theta[5]

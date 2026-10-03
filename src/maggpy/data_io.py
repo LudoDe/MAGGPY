@@ -60,7 +60,7 @@ def get_alpha_n_alpha_e(file_n: str, file_e: str) -> Tuple[Callable, Callable, n
 def catalogue_prep(datafiles, limits = DEFAULT_LIMITS):
     
     #prep catalogue with limits
-    print("Preparing catalogue with limits:", limits)
+    #print("Preparing catalogue with limits:", limits)
     
     catalogue_data = datafiles / "burst_catalog.dat"
     df = pd.read_csv(catalogue_data)
@@ -83,7 +83,7 @@ def catalogue_prep(datafiles, limits = DEFAULT_LIMITS):
     triggered_events    = len(df_trig)
     yearly_rate         = triggered_events / trigger_years
 
-    print(f"Triggered events: {triggered_events}, Trigger years: {trigger_years:.2f}, Yearly rate: {yearly_rate:.2f} events/year")
+    #print(f"Triggered events: {triggered_events}, Trigger years: {trigger_years:.2f}, Yearly rate: {yearly_rate:.2f} events/year")
 
     return {
         "df_trig"           : df_trig,

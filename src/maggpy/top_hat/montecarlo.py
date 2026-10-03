@@ -109,20 +109,29 @@ def check_and_resume_mcmc(filename, n_steps, initialize_walkers_func, n_walkers)
     # invert the logic for more readability
     if not filename.exists():
         initial_walkers = initialize_walkers_func(n_walkers)
-        print("Starting new run")
+        #print("Starting new run")
         return initial_walkers, n_steps, backend
     
     initial_walkers = backend.get_last_sample()
     if backend.iteration >= n_steps:
-        print("Already completed this run")
+        #print("Already completed this run")
         return initial_walkers, 0, backend
     
     n_iterations = n_steps - backend.iteration
-    print(f"Continuing from iteration {backend.iteration}")
+    #print(f"Continuing from iteration {backend.iteration}")
 
     return initial_walkers, n_iterations, backend
 
-def start_mcmc(log_probability_func, initialize_walkers_func, n_iterations, n_walkers, backend_fn, progress=True):
+blobs_dtype = [
+        ("l_pflux", float), 
+        ("l_epeak", float), 
+        ("l_poiss", float), 
+        ("l_eff", float)
+]
+
+
+
+def start_mcmc(log_probability_func, initialize_walkers_func, n_iterations, n_walkers, backend_fn, n_params = N_PARAMS, blobs = blobs_dtype, progress=False):
 
     initial_pos, n_steps_remaining, backend = check_and_resume_mcmc(
         filename                = backend_fn,
@@ -133,18 +142,12 @@ def start_mcmc(log_probability_func, initialize_walkers_func, n_iterations, n_wa
 
     moves = create_move_strategy()
     
-    blobs_dtype = [
-        ("l_pflux", float), 
-        ("l_epeak", float), 
-        ("l_poiss", float), 
-        ("l_eff", float)
-    ]
-
+    
     sampler = emcee.EnsembleSampler(
         n_walkers,
-        N_PARAMS,
+        n_params,
         log_probability_func,
-        blobs_dtype=blobs_dtype,
+        blobs_dtype=blobs,
         backend=backend,
         moves=moves
     )

@@ -6,11 +6,9 @@ This module contains all the functions needed to initialize the Monte Carlo simu
 from __future__ import annotations
 from dataclasses import dataclass
 
-import time
 import numpy            as np
 import pandas           as pd
 from pathlib            import Path
-from scipy.interpolate  import interp1d
 from astropy            import units as u
 from typing             import Mapping, Callable
 from astropy.cosmology  import Planck18
