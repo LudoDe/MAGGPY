@@ -97,8 +97,11 @@ The example notebooks in [`Tutorials`](Tutorials) cover:
 3. Running the structured jet model
 4. Predicting joint gravitational-wave and gamma-ray detections
 5. Estimating gravitational-wave sky localisation
+6. [Catalogue to prompt, joint GW, and X-ray afterglow detections](Tutorials/tutorial6_end_to_end_forecasts.ipynb): GRINTA/TED, Crystal Eye, and THESEUS, with annual-rate tables, localizations, and additional afterglows recovered from GW alerts
 
 The tutorials are intended to be read in order, but they can also be used as examples for setting up an independent analysis.
+
+Tutorial 6 starts from the full, unselected catalogue exported in Tutorial 2.1. Set its path, generation duration and jet fraction in the notebook configuration. Keep `Tutorials/forecast_pipeline.py` beside the notebook; the notebook includes the GWFish and VegasAfterglow installation instructions. Its tables, figures and calculation caches are written to `Output_files/tutorial6_forecasts/`.
 
 ## 🍉 Installing for development
 
