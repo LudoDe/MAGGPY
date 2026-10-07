@@ -9,6 +9,8 @@ from scipy.integrate import cumulative_trapezoid
 KEV_TO_ERG = 1.602176634e-9
 H_CGS = 6.62607015e-27
 
+# in case trapz doesn't exist rename
+np.trapz = np.trapz if hasattr(np, 'trapz') else np.trapezoid
 
 @dataclass
 class PromptInstrument:
