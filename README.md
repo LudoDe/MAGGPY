@@ -97,11 +97,11 @@ The example notebooks in [`Tutorials`](Tutorials) cover:
 3. Running the structured jet model
 4. Predicting joint gravitational-wave and gamma-ray detections
 5. Estimating gravitational-wave sky localisation
-6. [Structured-jet chain to detection forecasts](Tutorials/tutorial6_end_to_end_forecasts.ipynb): generate a full catalogue from the Tutorial 2 chain, then obtain prompt, joint GW and X-ray afterglow rates for GRINTA/TED, Crystal Eye and THESEUS
+6. [Structured-jet chain to detection forecasts](Tutorials/tutorial6_end_to_end_forecasts.ipynb): generate a full catalogue from the Tutorial 2 chain, apply the tutorial peak-flux cuts, then obtain joint GW and X-ray afterglow rates for GRINTA/TED, Crystal Eye and THESEUS
 
 The tutorials are intended to be read in order, but they can also be used as examples for setting up an independent analysis.
 
-Tutorial 6 starts from the converged structured-jet `emcee.h5` chain saved by Tutorial 2. Set the chain path, burn-in and simulation duration, then run the notebook from top to bottom. The jet fraction comes from the chain. For a custom structure run, also select its merger-rate and structure files. Keep `Tutorials/forecast_pipeline.py` beside the notebook; its catalogues, tables and figures are written to `Output_files/tutorial6_forecasts/`.
+Tutorial 6 starts from the converged structured-jet `emcee.h5` chain saved by Tutorial 2. Set the chain path, burn-in and simulation duration, then run the notebook from top to bottom. The jet fraction comes from the chain. For a custom structure run, also select its merger-rate and structure files. Keep `Tutorials/forecast_pipeline.py` beside the notebook. GWFish runs on the union of prompt-detected events; the afterglow catalogue retains viewing angles up to 10°. Its catalogues, tables and figures are written to `Output_files/tutorial6_forecasts/`.
 
 ## 🍉 Installing for development
 
