@@ -22,13 +22,31 @@ class PromptInstrument:
     observing_efficiency: float
     position_arcmin: float = None
     position_fraction: float = None
+    reference_sigma: float = 5.
 
 
-DEFAULT_PROMPT = (
-    PromptInstrument('GRINTA_TED', (50., 300.), 1., 0.32 * 3 / 5, 'ph', 0.5 * 8 / (4 * np.pi)),
-    PromptInstrument('Crystal_Eye', (50., 300.), 2., 0.180, 'ph', 0.3),
-    PromptInstrument('THESEUS_XGIS', (30., 150.), 1., 3e-8, 'erg', 0.16 * 0.65, 15., 0.9),
-)
+def reference_prompt(sigma=5.):
+    """Explicit common significance; see forecast_assumptions.md for provenance.
+
+    TED's 0.3 at 1 s and the EM efficiencies remain adopted forecast inputs.
+    Crystal Eye's published 50--300 keV 5-sigma value is 0.304, not the
+    0.766 value for 10--1000 keV. Its 2-s reference time remains an assumption.
+    The XGIS Yellow Book requirement is 3e-8 at 1 s and 3 sigma.
+    Linear significance rescaling is a background-limited approximation.
+    """
+    if not np.isfinite(sigma) or sigma <= 0:
+        raise ValueError('sigma must be positive and finite')
+    return (
+        PromptInstrument('GRINTA_TED', (50., 300.), 1., 0.3*sigma/5, 'ph',
+                         0.5*8/(4*np.pi), reference_sigma=sigma),
+        PromptInstrument('Crystal_Eye', (50., 300.), 2., 0.304*sigma/5, 'ph',
+                         0.3, reference_sigma=sigma),
+        PromptInstrument('THESEUS_XGIS', (30., 150.), 1., 3e-8*sigma/3, 'erg',
+                         2/(4*np.pi)*0.65, 15., 0.9, sigma),
+    )
+
+
+DEFAULT_PROMPT = reference_prompt()
 
 
 def make_full_catalogue(theta, simulation, interps, years, batch_size=10_000):
@@ -103,7 +121,27 @@ def select_prompt(catalogue, instruments=DEFAULT_PROMPT, seed=42, max_peak_time_
 
 
 def rate_fields(count, years):
+    if not np.isfinite(years) or years <= 0:
+        raise ValueError('years must be positive and finite')
     return {'count': int(count), 'rate_per_yr': count / years}
+
+
+def fraction_fields(count, total, prefix):
+    """Conditional fraction and 68.27% Wilson interval, including zero counts.
+
+    Undefined denominators are NaN. These intervals describe counting noise,
+    not the uncertainty in the population model or instrument response.
+    """
+    if count < 0 or total < count:
+        raise ValueError('fraction requires 0 <= count <= total')
+    if not total:
+        value = low = high = np.nan
+    else:
+        value = count / total
+        centre = (value + 0.5/total)/(1+1/total)
+        half = np.sqrt(value*(1-value)/total + 0.25/total**2)/(1+1/total)
+        low, high = max(0., centre-half), min(1., centre+half)
+    return {prefix: value, prefix+'_lo68': low, prefix+'_hi68': high}
 
 
 def prompt_summary(catalogue, years, instruments=DEFAULT_PROMPT):
@@ -191,10 +229,18 @@ def _fisher_chunk(parameters, detectors, config, waveform, threshold):
 
 
 def run_gw(parameters, networks, config, waveform='IMRPhenomD_NRTidalv2', threshold=8.,
-           n_jobs=1, chunk_size=256):
-    """Compute SNRs for the supplied prompt sample and Fisher areas above threshold."""
+           n_jobs=1, chunk_size=256, detector_duty_cycle=1., seed=42):
+    """Compute SNRs and Fisher areas for the same active detector subsets.
+
+    One Bernoulli operational state per physical detector/source is shared by
+    every network. Never multiply a completed network rate by duty**N: that
+    loses partially operational networks and misstates their localizations.
+    A duty cycle of one preserves the original all-operational calculation.
+    """
     from joblib import Parallel, delayed
     detectors = sorted({detector for network in networks.values() for detector in network})
+    if not 0 <= detector_duty_cycle <= 1:
+        raise ValueError('detector_duty_cycle must be in [0, 1]')
     if len(parameters) == 0:
         results = pd.DataFrame(index=parameters.index)
         for name in networks:
@@ -207,7 +253,11 @@ def run_gw(parameters, networks, config, waveform='IMRPhenomD_NRTidalv2', thresh
     print(f'GWFish: {len(parameters):,} sources, {len(detectors)} detectors')
     snr = np.concatenate(Parallel(n_jobs=n_jobs)(
         delayed(_snr_chunk)(chunk, detectors, config, waveform) for chunk in chunks))
+    active = np.random.default_rng(seed + 150).random(snr.shape) < detector_duty_cycle
+    snr = np.where(active, snr, 0.)
     results = pd.DataFrame(index=parameters.index)
+    for j, detector in enumerate(detectors):
+        results[f'active_{detector}'] = active[:, j]
     for name, network in networks.items():
         columns = [detectors.index(detector) for detector in network]
         network_snr = np.sqrt(np.sum(snr[:, columns] ** 2, axis=1))
@@ -216,11 +266,18 @@ def run_gw(parameters, networks, config, waveform='IMRPhenomD_NRTidalv2', thresh
         area = np.full(len(parameters), np.nan)
         print(f'  {name}: {len(positions):,} GW detections')
         if len(positions):
-            batches = [positions[a:a + chunk_size] for a in range(0, len(positions), chunk_size)]
-            values = Parallel(n_jobs=n_jobs)(
-                delayed(_fisher_chunk)(parameters.iloc[p].reset_index(drop=True), network,
-                                      config, waveform, threshold) for p in batches)
-            area[positions] = np.concatenate(values)
+            # Localize using exactly the detectors contributing to this SNR.
+            patterns = active[positions][:, columns]
+            for pattern in np.unique(patterns, axis=0):
+                subset = [d for d, live in zip(network, pattern) if live]
+                if not subset:
+                    continue
+                selected = positions[np.all(patterns == pattern, axis=1)]
+                batches = [selected[a:a + chunk_size] for a in range(0, len(selected), chunk_size)]
+                values = Parallel(n_jobs=n_jobs)(
+                    delayed(_fisher_chunk)(parameters.iloc[p].reset_index(drop=True), subset,
+                                          config, waveform, threshold) for p in batches)
+                area[selected] = np.concatenate(values)
         results[f'snr_{name}'] = network_snr
         results[f'gw_{name}'] = detected
         results[f'area90_{name}_deg2'] = area
@@ -244,10 +301,13 @@ def joint_summary(frame, gw_results, exposure_years, instruments=DEFAULT_PROMPT,
                    "median_viewing_angle_deg": frame.loc[joint, "theta_v_deg"].median(),
                    "joint_without_valid_localization": int((joint & (~np.isfinite(area) | (area <= 0))).sum()),
                    "median_area90_deg2": np.median(area[joint & np.isfinite(area) & (area > 0)]) if np.any(joint & np.isfinite(area) & (area > 0)) else np.nan}
+            row['joint_per_yr'] = row['rate_per_yr']
+            row.update(fraction_fields(int(joint.sum()), int(prompt.sum()), 'joint_fraction_of_prompt'))
             for cut in localization_cuts:
                 count = int((joint & np.isfinite(area) & (area > 0) & (area <= cut)).sum())
                 row[f"localized_le_{cut:g}_deg2_count"] = count
                 row[f"localized_le_{cut:g}_deg2_per_yr"] = count / exposure_years
+                row.update(fraction_fields(count, int(joint.sum()), f'localized_le_{cut:g}_deg2_fraction_of_joint'))
             if instrument.position_arcmin is not None:
                 row["em_position_arcmin_benchmark"] = instrument.position_arcmin
                 row["em_position_fraction_requirement"] = instrument.position_fraction
@@ -264,38 +324,151 @@ class AfterglowInstrument:
     limits: tuple
     followup_fraction: float = 1.
     position_arcmin: float = None
+    reference_sigma: float = 5.
 
 
 HXI_EXPOSURES = (10., 100., 1000., 10000., 100000.)
-DEFAULT_AFTERGLOW = (
-    AfterglowInstrument('GRINTA_HXI', (5., 30.), 'ph', HXI_EXPOSURES,
-                        tuple(1.2e-3 * np.sqrt(1e4 / dt) for dt in HXI_EXPOSURES)),
-    AfterglowInstrument('THESEUS_SXI', (0.3, 5.), 'erg', (100., 1500.), (1e-10, 1.8e-11),
-                        position_arcmin=2.),
-)
+def reference_afterglow(sigma=5.):
+    """HXI and SXI published 3-sigma limits rescaled to a common significance."""
+    if not np.isfinite(sigma) or sigma <= 0:
+        raise ValueError('sigma must be positive and finite')
+    return (
+        AfterglowInstrument('GRINTA_HXI', (5., 30.), 'ph', HXI_EXPOSURES,
+                            tuple(1.2e-3*sigma/3*np.sqrt(1e4/dt) for dt in HXI_EXPOSURES),
+                            reference_sigma=sigma),
+        AfterglowInstrument('THESEUS_SXI', (0.3, 5.), 'erg', (100., 1500.),
+                            (1e-10*sigma/3, 1.8e-11*sigma/3), position_arcmin=2., reference_sigma=sigma),
+    )
 
 
-def afterglow_parameters(frame, seed=42):
+DEFAULT_AFTERGLOW = reference_afterglow()
+
+
+def afterglow_parameters(frame, seed=42, preset='legacy'):
     from astropy.cosmology import Planck18
     rng = np.random.default_rng(seed + 200)
     n = len(frame)
-    return pd.DataFrame({"n_ism_cm3": rng.uniform(2.5e-4, 1.5e-2, n),
+    result = pd.DataFrame({"n_ism_cm3": rng.uniform(2.5e-4, 1.5e-2, n),
                          "eps_B": 10 ** rng.uniform(-4, -2, n),
                          "Gamma0": 10 ** rng.normal(2.3, 0.3, n),
                          "D_L_cm": Planck18.luminosity_distance(frame.z.to_numpy()).to_value("cm")}, index=frame.index)
+    if preset == 'legacy':
+        result['Erad_over_Ekin'] = 1.
+    elif preset in ('FS_SGRB', 'FS_GW17'):
+        # Explicit ratio avoids the ambiguous eta convention in the paper.
+        result['Erad_over_Ekin'] = rng.uniform(0.01, 0.1, n)
+        result['Gamma0'] = 500.
+        if preset == 'FS_SGRB':
+            result['n_ism_cm3'] = rng.uniform(3e-3, 15e-3, n)
+            result['eps_B'] = rng.uniform(0.01, 0.1, n)
+        else:
+            result['n_ism_cm3'], result['eps_B'] = 2.5e-4, 1.3e-4
+    else:
+        raise ValueError('preset must be legacy, FS_SGRB or FS_GW17')
+    result['E_kin_iso_erg'] = frame.E_iso_onaxis_erg.to_numpy()/result.Erad_over_Ekin
+    result['preset'] = preset
+    return result
+
+
+def afterglow_model(row, micro, theta_core_deg=5., resolutions=(0.05, 0.2, 5),
+                    jet_structure='tophat', jet_slope=4.):
+    """One forward-shock model shared by detection and light-curve diagnostics.
+
+    E_iso_onaxis_erg is radiated prompt energy; VegasAfterglow needs kinetic
+    energy. Legacy Series without the new energy field retain their old value.
+    The power-law option is VegasAfterglow's profile, not an exact reproduction
+    of the Ronchini HLE+FS structured-jet calculation.
+    """
+    from VegasAfterglow import ISM, TophatJet, Observer, Radiation, Model
+    common = dict(theta_c=np.deg2rad(theta_core_deg),
+                  E_iso=float(micro.get('E_kin_iso_erg', row.E_iso_onaxis_erg)),
+                  Gamma0=float(micro.Gamma0), spreading=False)
+    if jet_structure == 'tophat':
+        jet = TophatJet(**common)
+    elif jet_structure == 'powerlaw':
+        from VegasAfterglow import PowerLawJet
+        jet = PowerLawJet(**common, k_e=jet_slope, k_g=jet_slope)
+    else:
+        raise ValueError('jet_structure must be tophat or powerlaw')
+    return Model(jet=jet, medium=ISM(n_ism=float(micro.n_ism_cm3)),
+                 observer=Observer(lumi_dist=float(micro.D_L_cm), z=float(row.z), theta_obs=float(row.theta_v_rad)),
+                 fwd_rad=Radiation(eps_e=0.1, eps_B=float(micro.eps_B), p=2.2, xi_e=1.0), resolutions=resolutions)
+
+
+def band_light_curve(model, time_s, band_keV, flux_unit='erg', n_frequency=32):
+    """Observer-frame band flux: erg cm^-2 s^-1 or photons cm^-2 s^-1."""
+    if flux_unit not in ('erg', 'ph'):
+        raise ValueError('flux_unit must be erg or ph')
+    frequencies = np.geomspace(*band_keV, n_frequency)*KEV_TO_ERG/H_CGS
+    density = np.asarray(model.flux_density_grid(np.asarray(time_s), frequencies).total)
+    integrand = density if flux_unit == 'erg' else density/(H_CGS*frequencies[:, None])
+    return np.trapz(integrand, frequencies, axis=0)
+
+
+def _light_curve_event(row, micro, instruments, time_source_s, theta_core_deg,
+                       resolutions, jet_structure, jet_slope):
+    model = afterglow_model(row, micro, theta_core_deg, resolutions, jet_structure, jet_slope)
+    time_observer = time_source_s*(1+row.z)
+    nu_observer = 5.*KEV_TO_ERG/H_CGS/(1+row.z)
+    fnu = np.asarray(model.flux_density_grid(time_observer, np.array([nu_observer])).total)[0]
+    # nu_rest Lnu_rest = 4 pi DL^2 nu_obs Fnu_obs (no extra redshift factor).
+    luminosity = 4*np.pi*micro.D_L_cm**2*nu_observer*fnu
+    frames = []
+    for instrument in instruments:
+        flux = band_light_curve(model, time_observer, instrument.band_keV, instrument.flux_unit)
+        frames.append(pd.DataFrame({
+            'event_id': row.event_id, 'imager': instrument.name,
+            'theta_v_deg': row.theta_v_deg, 'redshift': row.z,
+            'time_observer_s': time_observer, 'time_source_s': time_source_s,
+            'band_flux': flux, 'flux_unit': instrument.flux_unit,
+            'nuLnu_5kev_erg_s': luminosity, 'E_kin_iso_erg': micro.E_kin_iso_erg,
+            'preset': micro.get('preset', 'legacy'), 'jet_structure': jet_structure,
+        }))
+    return pd.concat(frames, ignore_index=True)
+
+
+def sample_xray_light_curves(catalogue, microphysics, instruments=DEFAULT_AFTERGLOW,
+                             max_curves=60, seed=42, n_time=160, n_jobs=1,
+                             theta_core_deg=3.4, jet_structure='powerlaw', jet_slope=4.,
+                             resolutions=(0.05, 0.2, 5)):
+    """Deterministic sample stratified by angle; not a posterior confidence band.
+
+    All saved curves use the same event microphysics as the detection forecast.
+    A native-band flux and rest-frame 5-keV nu Lnu are exported separately.
+    """
+    from joblib import Parallel, delayed
+    if not catalogue.index.equals(microphysics.index):
+        raise ValueError('Catalogue and microphysics must have identical row indices')
+    if len(catalogue) == 0:
+        return pd.DataFrame(columns=LIGHT_CURVE_COLUMNS)
+    if max_curves < 1:
+        raise ValueError('max_curves must be positive')
+    rng = np.random.default_rng(seed+250)
+    # Divide the angle-ordered sample into strata before drawing within strata.
+    strata = np.array_split(np.argsort(catalogue.theta_v_deg.to_numpy()), min(12, max_curves, len(catalogue)))
+    chosen = []
+    budgets = np.full(len(strata), max_curves//len(strata))
+    budgets[:max_curves%len(strata)] += 1
+    for positions, budget in zip(strata, budgets):
+        chosen.extend(rng.choice(positions, min(len(positions), budget), replace=False))
+    time = np.geomspace(1., 1e6, n_time)
+    frames = Parallel(n_jobs=n_jobs)(delayed(_light_curve_event)(
+        catalogue.iloc[p], microphysics.iloc[p], instruments, time, theta_core_deg,
+        resolutions, jet_structure, jet_slope) for p in chosen)
+    return pd.concat(frames, ignore_index=True)
 
 
 AF_COLUMNS = ['event_id', 'imager', 'delay_s', 'ready_s', 'peak_time_s',
               'best_start_s', 'best_exposure_s', 'average_flux', 'flux_limit', 'margin', 'detected']
 
+LIGHT_CURVE_COLUMNS = ['event_id', 'imager', 'theta_v_deg', 'redshift', 'time_observer_s',
+                      'time_source_s', 'band_flux', 'flux_unit', 'nuLnu_5kev_erg_s',
+                      'E_kin_iso_erg', 'preset', 'jet_structure']
 
-def _afterglow_event(row, micro, imagers, delays, time, theta_core_deg, resolutions, exposure_samples):
-    from VegasAfterglow import ISM, TophatJet, Observer, Radiation, Model
-    model = Model(jet=TophatJet(theta_c=np.deg2rad(theta_core_deg), E_iso=float(row.E_iso_onaxis_erg),
-                                Gamma0=float(micro.Gamma0), spreading=False),
-                  medium=ISM(n_ism=float(micro.n_ism_cm3)),
-                  observer=Observer(lumi_dist=float(micro.D_L_cm), z=float(row.z), theta_obs=float(row.theta_v_rad)),
-                  fwd_rad=Radiation(eps_e=0.1, eps_B=float(micro.eps_B), p=2.2, xi_e=1.0), resolutions=resolutions)
+
+def _afterglow_event(row, micro, imagers, delays, time, theta_core_deg, resolutions, exposure_samples,
+                     jet_structure='tophat', jet_slope=4.):
+    model = afterglow_model(row, micro, theta_core_deg, resolutions, jet_structure, jet_slope)
     records = []
     for imager in imagers:
         frequencies = np.geomspace(*imager.band_keV, 32) * KEV_TO_ERG / H_CGS
@@ -305,6 +478,8 @@ def _afterglow_event(row, micro, imagers, delays, time, theta_core_deg, resoluti
         for delay in delays:
             ready = row.t_peak_s + delay
             after_alert = time >= ready
+            if not after_alert.any():
+                raise ValueError('The light-curve time grid ends before the response time')
             peak_time = time[after_alert][np.argmax(curve[after_alert])]
             trials = []
             for dt, limit in zip(imager.exposures_s, imager.limits):
@@ -325,16 +500,20 @@ def _afterglow_event(row, micro, imagers, delays, time, theta_core_deg, resoluti
 
 def run_afterglow(catalogue, microphysics, instruments=DEFAULT_AFTERGLOW,
                   delays=(0., 100., 300., 3600.), theta_core_deg=5., n_jobs=1,
-                  n_time=256, resolutions=(0.05, 0.2, 5), exposure_samples=32):
-    """Use the supplied prompt catalogue, already restricted to viewing angles ≤10°."""
+                  n_time=256, resolutions=(0.05, 0.2, 5), exposure_samples=32,
+                  jet_structure='tophat', jet_slope=4.):
+    """Use the supplied prompt sample with its explicitly chosen angle cut."""
     from joblib import Parallel, delayed
     print(f'VegasAfterglow: {len(catalogue):,} sources')
     if len(catalogue) == 0:
         return pd.DataFrame(columns=AF_COLUMNS)
+    if not catalogue.index.equals(microphysics.index):
+        raise ValueError('Catalogue and microphysics must have identical row indices')
     time = np.geomspace(1., 1e7, n_time)
     records = Parallel(n_jobs=n_jobs)(
         delayed(_afterglow_event)(catalogue.iloc[p], microphysics.iloc[p], instruments,
-                                 delays, time, theta_core_deg, resolutions, exposure_samples)
+                                 delays, time, theta_core_deg, resolutions, exposure_samples,
+                                 jet_structure, jet_slope)
         for p in range(len(catalogue)))
     return pd.concat(records, ignore_index=True)
 
@@ -359,7 +538,7 @@ def afterglow_summary(frame, gw_results, records, years, instruments=DEFAULT_AFT
                     area = gw_results[f'area90_{network}_deg2'].to_numpy()
                     joint = gamma & gw & afterglow
                     localized = joint & np.isfinite(area) & (area > 0) & (area <= localization_cut)
-                    rows.append({'prompt_instrument': prompt.name, 'imager': imager.name,
+                    row = {'prompt_instrument': prompt.name, 'imager': imager.name,
                                  'network': network, 'delay_s': delay,
                                  'localization_cut_deg2': localization_cut,
                                  'followup_fraction': imager.followup_fraction,
@@ -369,5 +548,10 @@ def afterglow_summary(frame, gw_results, records, years, instruments=DEFAULT_AFT
                                  'prompt_gw_afterglow_count': int(joint.sum()),
                                  'prompt_gw_afterglow_per_yr': joint.sum() / years,
                                  'localized_prompt_gw_afterglow_count': int(localized.sum()),
-                                 'localized_prompt_gw_afterglow_per_yr': localized.sum() / years})
+                                 'localized_prompt_gw_afterglow_per_yr': localized.sum() / years,
+                                 'prompt_count': int(gamma.sum()), 'joint_prompt_count': int((gamma & gw).sum())}
+                    row.update(fraction_fields(int((gamma & afterglow).sum()), int(gamma.sum()), 'afterglow_fraction_of_prompt'))
+                    row.update(fraction_fields(int(joint.sum()), int((gamma & gw).sum()), 'afterglow_fraction_of_joint_prompt'))
+                    row.update(fraction_fields(int(localized.sum()), int(joint.sum()), 'localized_fraction_of_joint_afterglow'))
+                    rows.append(row)
     return pd.DataFrame(rows)

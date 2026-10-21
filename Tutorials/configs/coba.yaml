@@ -111,9 +111,10 @@ LHO_sharp: # Renamed from LHO for clarity as LIGO O5
       npoints:            5000
       arm_length:         4000
 
-LIO_sharp: # Renamed from LHO for clarity as LIGO O5
-      lat:                19 * np.pi / 180.
-      lon:                -77 * np.pi / 180.
+LIO_sharp: # Adopted A-sharp sensitivity at the LIGO-India / Aundha site
+      # Aundha site, Nuttall Indico April 2026, slide 8. East longitude is positive.
+      lat:                (19 + 36. / 60 + 50. / 3600) * np.pi / 180.
+      lon:                (77 + 1. / 60 + 54. / 3600) * np.pi / 180.
       opening_angle:      np.pi / 2.
       azimuth:            126. * np.pi / 180.
       psd_data:           ligo_sharp.txt
