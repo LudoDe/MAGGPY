@@ -1,0 +1,28 @@
+{
+  "kind": "controlled model checks; not a population forecast",
+  "python": "3.11.17",
+  "versions": {
+    "VegasAfterglow": "2.0.4",
+    "afterglowpy": "0.8.1",
+    "numpy": "1.26.4",
+    "astropy": "6.1.7"
+  },
+  "time_frame": "source",
+  "luminosity": "nu Lnu at rest 5 keV [erg/s]",
+  "solver_comparison": {
+    "E_kin_iso_erg": 2e+52,
+    "n_ism_cm3": 0.009,
+    "eps_B": 0.055,
+    "eps_e": 0.1,
+    "p": 2.2,
+    "theta_core_deg": 3.4,
+    "Gamma0": 500.0,
+    "spreading": false,
+    "redshift": 0.5
+  },
+  "ratio_time_window_s": [
+    1000.0,
+    100000.0
+  ],
+  "ratio_luminosity_floor_erg_s": 1e+38
+}
